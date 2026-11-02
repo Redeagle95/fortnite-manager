@@ -661,19 +661,11 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (isFinished(match)) return match;
   match.stage = "ZONE";
   if (match.phaseIndex >= 6) {
-    const lastEnemy = match.teams.find(team => !team.isUser && team.alive);
-    if (lastEnemy && match.userTeam.alive && !["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "FIGHT"].includes(action.type)) {
-      const report = fight(match, random);
-      if (!report.won) {
-        match.userTeam.alive = false;
-        for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player);
-      } else {
-        for (const player of alivePlayers(lastEnemy)) eliminatePlayer(player);
-        lastEnemy.alive = false;
-      }
-    }
+    // Zone 7 is a true moving endgame: resolve one chosen fight per decision,
+    // but keep the match alive until only one squad remains.
     updateCounts(match);
-    if (!isFinished(match)) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match) && match.teamsRemaining <= 1) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match) && !match.userTeam.alive) finishMatch(match, "ELIMINATED");
     return match;
   }
   const next = match.phases[match.phaseIndex];
@@ -688,36 +680,43 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
 }
 export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> {
   const options: Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> = match.stage === "DROP" ? [
-    { type: "FIGHT" as const, label: "Atterrir ici malgré la contestation", description: "Prendre le fight au spawn si une équipe adverse est présente.", risk: "HIGH" as const },
-    { type: "LOOT" as const, label: "Atterrir ici et loot librement", description: "Sécuriser le spot et récupérer le premier équipement.", risk: "MEDIUM" as const },
-    { type: "ROTATE" as const, label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" as const },
+    { type: "FIGHT", label: "Atterrir ici malgré la contestation", description: "Prendre le fight au spawn si une équipe adverse est présente.", risk: "HIGH" },
+    { type: "LOOT", label: "Atterrir ici et loot librement", description: "Sécuriser le spot et récupérer le premier équipement.", risk: "MEDIUM" },
+    { type: "ROTATE", label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" },
   ] : match.phaseIndex === 1 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Comparer les notes, la vie, les boucliers et l'équipement des deux équipes.", risk: "HIGH" as const },
-    { type: "FARM_FULL" as const, label: "Farm complet · 500/500", description: "Récolter le maximum : 500 bois, 500 pierre et 500 métal.", risk: "LOW" as const },
-    { type: "FARM_HALF_ROTATE" as const, label: "Farm à moitié puis rotate", description: "Atteindre 250 de chaque matériau et partir plus tôt vers la zone.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Prendre des tags pour la surge", description: "Infliger des dégâts à distance sans chercher l'élimination.", risk: "MEDIUM" as const },
+    { type: "LOOT", label: "Explorer le spot et ouvrir les coffres", description: "Récupérer armes, soins, munitions et matériaux.", risk: "LOW" },
+    { type: "FIGHT", label: "Prendre un fight", description: "Engager une équipe contestataire.", risk: "HIGH" },
+    { type: "FARM_FULL", label: "Farm complet · 500/500", description: "Récolter 500 bois, pierre et métal.", risk: "LOW" },
+    { type: "FARM_HALF_ROTATE", label: "Farm à moitié puis rotate", description: "Atteindre 250 de chaque matériau puis partir.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Prendre des tags pour la surge", description: "Infliger des dégâts pour augmenter le score de surge.", risk: "MEDIUM" },
   ] : match.phaseIndex === 2 ? [
-    { type: "ROTATE" as const, label: "Lancer la rotation maintenant", description: "Rejoindre directement la prochaine zone avant la fermeture de la tempête.", risk: "LOW" as const },
-    { type: "FIGHT_THEN_ROTATE" as const, label: "Prendre un fight puis rotate", description: "Tenter un engagement avant de rejoindre la prochaine zone.", risk: "HIGH" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Chercher des dégâts sur une équipe adverse pour atteindre le seuil de storm surge.", risk: "MEDIUM" as const },
+    { type: "ROTATE", label: "Rotation sécurisée", description: "Rejoindre le prochain cercle.", risk: "LOW" },
+    { type: "FIGHT_THEN_ROTATE", label: "Fight puis rotation", description: "Prendre un combat avant de partir.", risk: "HIGH" },
+    { type: "DISENGAGE", label: "Se désengager", description: "Privilégier un trajet moins dangereux vers la zone.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Farmer la surge", description: "Prendre des tags pour atteindre le seuil.", risk: "MEDIUM" },
   ] : match.phaseIndex === 3 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Évaluer la force et le stuff adverse avant l'engagement.", risk: "HIGH" as const },
-    { type: "ROTATE" as const, label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête et rejoindre le prochain cercle.", risk: "MEDIUM" as const },
-    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources sans dépasser 500 par matériau.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre des tags pour éviter les dégâts de storm surge si le seuil n'est pas atteint.", risk: "MEDIUM" as const },
+    { type: "FOCUS_FIRE", label: "Focus une équipe", description: "Concentrer les tirs sur une cible prioritaire.", risk: "HIGH" },
+    { type: "FIGHT", label: "Prendre un fight sur la rotation", description: "Comparer les notes, les PV, les boucliers et l'équipement.", risk: "HIGH" },
+    { type: "ROTATE", label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête.", risk: "MEDIUM" },
+    { type: "REFRESH", label: "Refresh matériaux", description: "Compléter progressivement les ressources.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Farmer la surge", description: "Infliger les dégâts manquants aux adversaires.", risk: "MEDIUM" },
   ] : match.phaseIndex === 4 || match.phaseIndex === 5 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight contrôlé", description: "Évaluer les adversaires proches et tenter une élimination avant le dernier cercle.", risk: "HIGH" as const },
-    { type: "ROTATE" as const, label: "Prendre une bonne position", description: "Rejoindre le prochain cercle et sécuriser une position jouable.", risk: "MEDIUM" as const },
-    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre les derniers tags nécessaires pour atteindre le seuil.", risk: "MEDIUM" as const },
+    { type: "FOCUS_FIRE", label: "Focus une équipe", description: "Chercher une élimination rapide.", risk: "HIGH" },
+    { type: "BOXFIGHT", label: "Prendre un boxfight", description: "Le build, le placement et les pompes influencent le combat rapproché.", risk: "HIGH" },
+    { type: "ROTATE", label: "Prendre une bonne position", description: "Rejoindre le prochain cercle.", risk: "MEDIUM" },
+    { type: "DISENGAGE", label: "Se désengager", description: "Quitter un combat défavorable pour survivre.", risk: "LOW" },
+    { type: "REFRESH", label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" },
   ] : [
-    { type: "FIGHT_HEIGHT" as const, label: "Prendre la hauteur", description: "Meilleure synergie avec fusils d'assaut et snipers.", risk: "HIGH" as const },
-    { type: "FIGHT_MID" as const, label: "Jouer au milieu", description: "Meilleure synergie avec les pompes et les armes polyvalentes.", risk: "HIGH" as const },
-    { type: "FIGHT_LOW" as const, label: "Jouer en bas", description: "Meilleure synergie avec les SMG et les pompes.", risk: "HIGH" as const },
-    { type: "FIGHT_OUTSIDE" as const, label: "Jouer hors zone", description: "Privilégier les armes à distance et les objets utilitaires.", risk: "HIGH" as const },
+    { type: "FIGHT_HEIGHT", label: "Prendre la hauteur", description: "Synergie renforcée avec fusils d'assaut et snipers.", risk: "HIGH" },
+    { type: "FIGHT_MID", label: "Jouer au milieu", description: "Synergie renforcée avec les pompes.", risk: "HIGH" },
+    { type: "FIGHT_LOW", label: "Jouer en bas", description: "Synergie renforcée avec les SMG et les pompes.", risk: "HIGH" },
+    { type: "FIGHT_OUTSIDE", label: "Jouer extérieur", description: "Synergie avec les armes à distance et objets utilitaires.", risk: "HIGH" },
   ];
   const canRevive = match.userTeam.players.some(player => player.alive && player.knocked) && activePlayers(match.userTeam).length > 0;
-  if (canRevive) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV. Il faut garder au moins un mate actif.", risk: "MEDIUM" });
+  if (canRevive) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV.", risk: "MEDIUM" });
+  const needsHealing = match.userTeam.players.some(player => player.alive && !player.knocked && (player.health < 100 || player.shield < 100));
+  if (needsHealing && match.userTeam.inventory.items.some(item => item.kind === "HEAL" && item.quantity > 0)) options.push({ type: "HEAL", label: "Utiliser un soin", description: "Soigner le joueur le plus affaibli.", risk: "LOW" });
+  if (match.phaseIndex >= 3 && match.phaseIndex < 6) options.push({ type: "HOLD_POSITION", label: "Construire une position défensive", description: "Dépenser 10 matériaux pour sécuriser la position.", risk: "LOW" });
   return options;
 }
 export function getRarityRollTable(): ReadonlyArray<{ rarity: Rarity; weight: number }> {
