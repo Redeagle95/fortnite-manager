@@ -68,7 +68,19 @@ function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
 
 function Scene({season,skin,victory,quality}:Props) {
   const particles=quality==="low"?20:quality==="medium"?45:85;
-  const backgroundTexture = useLoader(THREE.TextureLoader, "/lobbies/imafor.png");
+  // Visuel associe a chaque annee de la carriere.
+  const backgroundByYear: Record<number, string> = {
+    2019: "/lobbies/imafor.png",
+    2020: "/lobbies/f1.png",
+    2021: "/lobbies/f2.png",
+    2022: "/lobbies/f3.png",
+    2023: "/lobbies/f4.png",
+    2024: "/lobbies/f5.png",
+    2025: "/lobbies/f5.png",
+    2026: "/lobbies/f5.png",
+  };
+  const backgroundPath = backgroundByYear[season.year] ?? "/lobbies/imafor.png";
+  const backgroundTexture = useLoader(THREE.TextureLoader, backgroundPath);
   backgroundTexture.colorSpace = THREE.SRGBColorSpace;
   return <>
     <primitive attach="background" object={backgroundTexture}/>
