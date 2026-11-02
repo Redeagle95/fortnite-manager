@@ -235,7 +235,8 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
   if (!location) throw new Error("Point d'atterrissage inconnu.");
   const userTeam = createTeam("user-team", teamNames[0] ?? "Ton équipe", true, mode, location.id, location.x, location.y, random, 72, playerRatings);
   const teams: BattleTeam[] = [userTeam];
-  for (let i = 0; i < 24; i++) {
+  const totalTeams = Math.floor(100 / TEAM_SIZE[mode]);
+  for (let i = 0; i < totalTeams - 1; i++) {
     const poi = BATTLE_ROYALE_MAP.locations[random.nextInt(0, BATTLE_ROYALE_MAP.locations.length - 1)];
     teams.push(createTeam(`bot-${i + 1}`, `Team ${String(i + 1).padStart(2, "0")}`, false, mode, poi.id, poi.x + random.nextInt(-120, 120), poi.y + random.nextInt(-120, 120), random));
   }
