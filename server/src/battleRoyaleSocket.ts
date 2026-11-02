@@ -43,7 +43,9 @@ export function registerBattleRoyaleSocket(io: Server): void {
         const type = payload.action;
         if (type !== "FIGHT" && type !== "LOOT" && type !== "ROTATE") throw new Error("Choix de spawn invalide.");
         const locationId = typeof payload.locationId === "string" ? payload.locationId : undefined;
-        resolveDrop(match, type === "ROTATE" ? { type, locationId } : { type });
+        if (type === "ROTATE") resolveDrop(match, { type: "ROTATE", locationId });
+        else if (type === "FIGHT") resolveDrop(match, { type: "FIGHT" });
+        else resolveDrop(match, { type: "LOOT" });
         io.to(match.id).emit("battle:state", match);
       } catch (error) {
         socket.emit("battle:error", { message: error instanceof Error ? error.message : "Action impossible." });
