@@ -690,6 +690,11 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!match.userTeam.alive) { updateCounts(match); return match; }
   const random = new SeededRandom(match.seed + 1000 + match.phaseIndex * 97 + match.events.length * 13);
   processAction(match, action, random);
+  // Inventory and teammate interactions are quick decisions; they do not consume an entire storm phase.
+  if (["PICKUP_LOOT", "HEAL", "REVIVE", "REBOOT"].includes(action.type)) {
+    updateCounts(match);
+    return match;
+  }
   if (!isFinished(match)) simulateWorldTick(match, random);
   if (isFinished(match)) return match;
   match.stage = "ZONE";
