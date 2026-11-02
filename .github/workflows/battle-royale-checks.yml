@@ -12,14 +12,14 @@ on:
       - feat/deep-competitive-gameplay
       - feat/meaningful-team-roles
       - feat/advanced-mobile-endgame
-      - feat/meaningful-team-roles
-      - feat/advanced-mobile-endgame
   pull_request:
     branches:
       - main
       - feat/battle-royale-five-zone-strategy
       - feat/live-storm-surge-farming
       - feat/deep-competitive-gameplay
+      - feat/meaningful-team-roles
+      - feat/advanced-mobile-endgame
 
 jobs:
   test-and-build:
