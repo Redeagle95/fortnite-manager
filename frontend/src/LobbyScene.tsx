@@ -68,18 +68,17 @@ function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
 
 function Scene({season,skin,victory,quality}:Props) {
   const particles=quality==="low"?20:quality==="medium"?45:85;
-  // Visuel associe a chaque annee de la carriere.
-  const backgroundByYear: Record<number, string> = {
-    2019: "/lobbies/imafor.png",
-    2020: "/lobbies/f1.png",
-    2021: "/lobbies/f2.png",
-    2022: "/lobbies/f3.png",
-    2023: "/lobbies/f4.png",
-    2024: "/lobbies/f5.png",
-    2025: "/lobbies/f5.png",
-    2026: "/lobbies/f5.png",
+  // Chaque saison charge la carte correspondant à son chapitre.
+  const backgroundByCell: Record<number, string> = {
+    0: "/lobbies/imafor.png",
+    1: "/lobbies/f1.png",
+    2: "/lobbies/f2.png",
+    3: "/lobbies/f3.png",
+    4: "/lobbies/f4.png",
+    5: "/lobbies/f5.png",
+    6: "/lobbies/f5.png",
   };
-  const backgroundPath = backgroundByYear[season.year] ?? "/lobbies/imafor.png";
+  const backgroundPath = backgroundByCell[season.backgroundCell] ?? "/lobbies/imafor.png";
   const backgroundTexture = useLoader(THREE.TextureLoader, backgroundPath);
   backgroundTexture.colorSpace = THREE.SRGBColorSpace;
   return <>
