@@ -182,10 +182,23 @@ describe("Battle Royale simulation", () => {
     resolveDrop(match, { type: "LOOT" });
     match.phaseIndex = 6;
     match.mobileZoneActive = true;
+    match.storm = { x: 5000, y: 5000, radius: match.phases[5].radius };
+    match.stormTarget = { ...match.storm };
     match.secondsIntoShrink = match.phases[5].shrinkSeconds;
     match.secondsUntilShrink = 0;
     const before = {...match.storm};
     advanceMatchTime(match, 20);
     expect(match.storm.x !== before.x || match.storm.y !== before.y).toBe(true);
   });
+  it("allows picking up ground loot and replacing a full weapon slot", () => {
+    const match = createBattleRoyale(9105, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.inventory.weapons = Array.from({length:5},(_,i)=>({id:"old-"+i,definitionId:"old-"+i,name:"Old weapon "+i,category:"ASSAULT_RIFLE" as const,rarity:"COMMON" as const,damage:20,magazine:30,ammo:30}));
+    const drop = {id:"ground-weapon",kind:"WEAPON" as const,name:"New shotgun",definitionId:"pump-shotgun",category:"SHOTGUN" as const,rarity:"EPIC" as const,damage:100,quantity:1};
+    match.lootOnGround.push(drop);
+    takeZoneAction(match,{type:"PICKUP_LOOT",dropId:drop.id,replaceWeaponId:"old-0"});
+    expect(match.userTeam.inventory.weapons[0].name).toBe("New shotgun");
+    expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(false);
+  });
+
 });
