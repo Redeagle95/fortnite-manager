@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBattleRoyale, getActionOptions, getFightProbability, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
+import { advanceMatchTime, createBattleRoyale, getActionOptions, getFightProbability, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
 
 describe("Battle Royale simulation", () => {
   it("moves enemy squads on the map as the match advances", () => {
@@ -11,6 +11,38 @@ describe("Battle Royale simulation", () => {
       return team.position.x !== position.x || team.position.y !== position.y;
     });
     expect(moved).toBe(true);
+  });
+
+  it("farms to full or half materials and rotates early", () => {
+    const full = createBattleRoyale(6101, "TRIO", "pine-woods");
+    resolveDrop(full, { type: "LOOT" });
+    takeZoneAction(full, { type: "FARM_FULL" });
+    expect(full.userTeam.resources).toEqual({ wood: 500, stone: 500, metal: 500 });
+
+    const half = createBattleRoyale(6102, "TRIO", "pine-woods");
+    resolveDrop(half, { type: "LOOT" });
+    const before = { ...half.userTeam.position };
+    takeZoneAction(half, { type: "FARM_HALF_ROTATE" });
+    expect(half.userTeam.resources).toEqual({ wood: 250, stone: 250, metal: 250 });
+    expect(half.userTeam.position).not.toEqual(before);
+  });
+
+  it("records storm damage over live simulation time", () => {
+    const match = createBattleRoyale(6103, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.position = { x: 9900, y: 9900 };
+    match.storm = { x: 5000, y: 5000, radius: 100 };
+    advanceMatchTime(match, 5);
+    expect(match.stormDamageTaken).toBe(5);
+    expect(match.userTeam.players[0].health).toBe(95);
+  });
+
+  it("adds surge tags to team damage progress", () => {
+    const match = createBattleRoyale(6104, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    takeZoneAction(match, { type: "FARM_SURGE" });
+    expect(match.userTeam.damageDealt).toBeGreaterThan(0);
+    expect(match.events.some(item => item.type === "SURGE")).toBe(true);
   });
 
   it("creates a full lobby and offers spawn decisions", () => {
