@@ -45,6 +45,19 @@ function event(match: BattleMatch, type: BattleEvent["type"], title: string, des
 }
 function alivePlayers(team: BattleTeam): BattlePlayer[] { return team.players.filter(p => p.alive); }
 function activePlayers(team: BattleTeam): BattlePlayer[] { return team.players.filter(p => p.alive && !p.knocked); }
+function activeRolePlayer(team: BattleTeam, role: BattlePlayer["role"]): BattlePlayer | undefined {
+  return activePlayers(team).find(player => player.role === role);
+}
+function roleSkill(team: BattleTeam, role: BattlePlayer["role"], skill: keyof BattlePlayer["skills"]): number {
+  return activeRolePlayer(team, role)?.skills[skill] ?? 0;
+}
+function rotationRiskMultiplier(team: BattleTeam): number {
+  const igl = activeRolePlayer(team, "IGL");
+  const scout = activeRolePlayer(team, "SCOUT");
+  const leadership = igl ? 0.10 + igl.skills.decisionMaking * 0.002 : 0;
+  const awareness = scout ? 0.08 + scout.skills.gameSense * 0.0015 : 0;
+  return clamp(1 - leadership - awareness, 0.45, 1);
+}
 function aliveTeams(match: BattleMatch): BattleTeam[] { return match.teams.filter(t => t.alive); }
 function isFinished(match: BattleMatch): boolean { return match.stage === "FINISHED"; }
 function updateCounts(match: BattleMatch): void {
@@ -69,12 +82,14 @@ function pickLocation(random: SeededRandom): MapLocation {
 }
 function makeDrop(match: BattleMatch, location: MapLocation, random: SeededRandom): LootDrop[] {
   const drops: LootDrop[] = [];
+  const scout = activeRolePlayer(match.userTeam, "SCOUT");
+  const scoutedLocation = scout ? { ...location, lootQuality: clamp(location.lootQuality + 10 + scout.skills.gameSense * 0.1, 0, 100) } : location;
   const count = Math.max(2, location.lootAmount + random.nextInt(-2, 3));
   for (let i = 0; i < count; i++) {
     const roll = random.next();
     if (roll < 0.58) {
       const weapon = WEAPONS[random.nextInt(0, WEAPONS.length - 1)];
-      const rarity = rarityRoll(random, location.lootQuality);
+      const rarity = rarityRoll(random, scoutedLocation.lootQuality);
       drops.push({ id: `loot-${match.lootOnGround.length + drops.length + 1}`, kind: "WEAPON", name: weapon.name, definitionId: weapon.id, category: weapon.category, rarity, damage: Math.round(weapon.baseDamage * RARITY_MULTIPLIER[rarity]), quantity: 1 });
     } else if (roll < 0.83) {
       const item = CONSUMABLES[random.nextInt(0, CONSUMABLES.length - 1)];
@@ -131,7 +146,12 @@ function teamPower(team: BattleTeam, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE
   const gear = clamp(weapon, 10, 100);
   const health = players.reduce((sum, p) => sum + p.health + p.shield * 0.6, 0) / players.length / 2;
   const buildBonus = Math.min(12, team.builds * 1.5) + Math.min(10, (team.resources.wood + team.resources.stone + team.resources.metal) / 100);
-  return skill * 0.65 + gear * 0.2 + health * 0.1 + buildBonus * 0.05 + styleWeaponBonus(team, style);
+  const rolePower =
+    (activeRolePlayer(team, "IGL") ? 1.5 + roleSkill(team, "IGL", "decisionMaking") * 0.035 : 0) +
+    (activeRolePlayer(team, "FRAGGER") ? 2 + roleSkill(team, "FRAGGER", "aim") * 0.045 : 0) +
+    (activeRolePlayer(team, "SUPPORT") ? 1 + roleSkill(team, "SUPPORT", "teamwork") * 0.025 : 0) +
+    (activeRolePlayer(team, "SCOUT") ? 1.5 + roleSkill(team, "SCOUT", "gameSense") * 0.035 : 0);
+  return skill * 0.65 + gear * 0.2 + health * 0.1 + buildBonus * 0.05 + styleWeaponBonus(team, style) + rolePower;
 }
 function findEnemy(match: BattleMatch, preferredLocation?: string): BattleTeam | undefined {
   const enemies = match.teams.filter(t => !t.isUser && t.alive);
@@ -148,7 +168,11 @@ export function getFightProbability(match: BattleMatch, style?: "HEIGHT" | "MID"
   const enemyPower = teamPower(enemy);
   const positioning = style === "HEIGHT" ? 7 : style === "MID" ? 3 : style === "LOW" ? 1 : style === "OUTSIDE" ? -2 : 0;
   const buildAdvantage = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
-  return Math.round(clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage, 5, 95));
+  const igl = activeRolePlayer(match.userTeam, "IGL");
+  const tacticalRead = igl ? 1 + igl.skills.decisionMaking * 0.045 : 0;
+  const fragger = activeRolePlayer(match.userTeam, "FRAGGER");
+  const entryPressure = fragger ? 1 + fragger.skills.aim * 0.055 : 0;
+  return Math.round(clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage + tacticalRead + entryPressure, 5, 95));
 }
 function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE", combatMode?: "FOCUS" | "BOXFIGHT", targetPlayerId?: string): FightReport {
   const enemy = findEnemy(match, match.stage === "DROP" ? match.selectedDropId : match.currentLocationId);
@@ -157,7 +181,8 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
   const allies = activePlayers(match.userTeam);
   const averageAim = allies.reduce((sum, player) => sum + player.skills.aim + player.skills.teamwork, 0) / Math.max(1, allies.length) / 2;
   const averageBuild = allies.reduce((sum, player) => sum + player.skills.building, 0) / Math.max(1, allies.length);
-  const focusBonus = combatMode === "FOCUS" ? averageAim * 0.075 : 0;
+  const fragger = activeRolePlayer(match.userTeam, "FRAGGER");
+  const focusBonus = combatMode === "FOCUS" ? averageAim * 0.075 + (fragger ? fragger.skills.aim * 0.04 : 0) : 0;
   const boxBonus = combatMode === "BOXFIGHT" ? averageBuild * 0.09 + (match.userTeam.inventory.weapons.some(weapon => weapon.category === "SHOTGUN") ? 5 : -2) : 0;
   const winProbability = Math.round(clamp(baseProbability + focusBonus + boxBonus, 5, 95));
   const won = random.next() * 100 < winProbability;
@@ -165,7 +190,9 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
   if (targetPlayerId) enemyAlive.sort((a, b) => Number(b.id === targetPlayerId) - Number(a.id));
   else if (combatMode === "FOCUS") enemyAlive.sort((a, b) => (a.health + a.shield) - (b.health + b.shield));
   const enemyEliminations = won ? enemyAlive.length : random.nextInt(0, Math.max(1, enemyAlive.length - 1));
-  const allyLosses = won ? (random.next() < 0.12 ? 1 : 0) : Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)));
+  const support = activeRolePlayer(match.userTeam, "SUPPORT");
+  const protection = support ? 0.12 + support.skills.teamwork * 0.002 : 0;
+  const allyLosses = won ? (random.next() < 0.12 * (1 - protection) ? 1 : 0) : Math.max(0, Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)) - (support ? 1 : 0)));
   const userKiller = activePlayers(match.userTeam).sort((a, b) => Number(b.role === "FRAGGER") - Number(a.role === "FRAGGER"))[0];
   for (let i = 0; i < enemyEliminations; i++) {
     const victim = enemyAlive[i];
@@ -174,7 +201,8 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
     event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
   }
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
-  const damage = enemyEliminations * 100 + (won ? 80 : 35);
+  const fraggerMultiplier = fragger ? 1.05 + fragger.skills.aim * 0.001 : 1;
+  const damage = Math.round((enemyEliminations * 100 + (won ? 80 : 35)) * fraggerMultiplier);
   match.userTeam.damageDealt += damage;
   if (userKiller) userKiller.damageDealt += damage;
   for (let i = 0; i < allyLosses; i++) {
@@ -261,9 +289,10 @@ function reviveTeam(team: BattleTeam, playerId?: string): string {
     ?? team.players.find(player => player.alive && player.knocked);
   if (!target) return "Aucun équipier à terre à réanimer.";
   target.knocked = false;
-  target.health = 30;
+  const support = activeRolePlayer(team, "SUPPORT");
+  target.health = Math.min(50, 30 + (support ? Math.round(support.skills.teamwork * 0.2) : 0));
   target.shield = 0;
-  return `${target.name} est réanimé avec 30 PV.`;
+  return `${target.name} est réanimé avec ${target.health} PV${support ? " grâce au Support" : ""}.`;
 }
 function healTeam(team: BattleTeam, itemDefinitionId?: string, playerId?: string): string {
   const target = team.players.find(p => p.id === playerId && p.alive) ?? team.players.find(p => p.alive && (p.health < 100 || p.shield < 100));
@@ -272,8 +301,10 @@ function healTeam(team: BattleTeam, itemDefinitionId?: string, playerId?: string
   if (itemIndex < 0) return "Aucun consommable de soin disponible.";
   const item = team.inventory.items[itemIndex];
   const before = target.health + target.shield;
-  target.health = Math.min(100, target.health + (item.heal ?? 0));
-  target.shield = Math.min(100, target.shield + (item.shield ?? 0));
+  const support = activeRolePlayer(team, "SUPPORT");
+  const supportMultiplier = support ? 1.15 + support.skills.teamwork * 0.001 : 1;
+  target.health = Math.min(100, target.health + Math.round((item.heal ?? 0) * supportMultiplier));
+  target.shield = Math.min(100, target.shield + Math.round((item.shield ?? 0) * supportMultiplier));
   item.quantity -= 1;
   if (item.quantity <= 0) team.inventory.items.splice(itemIndex, 1);
   return `${target.name} récupère ${Math.round(target.health + target.shield - before)} points de vie/bouclier grâce à ${item.name}.`;
@@ -383,9 +414,11 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       const distance = Math.hypot(location.x - team.position.x, location.y - team.position.y);
       const highGround = location.tags.some(tag => ["hauteur", "position", "hill", "high-ground"].includes(tag));
       const highGroundBonus = match.phaseIndex >= 4 && highGround ? 1500 : 0;
-      const lootBonus = location.lootQuality * (team.strategy === "AGGRESSIVE" ? 5 : 3);
+      const scoutBonus = activeRolePlayer(team, "SCOUT") ? 1.5 + roleSkill(team, "SCOUT", "gameSense") * 0.025 : 0;
+      const lootBonus = location.lootQuality * ((team.strategy === "AGGRESSIVE" ? 5 : 3) + scoutBonus);
       const dangerWeight = team.strategy === "PRUDENT" ? 13 : team.strategy === "AGGRESSIVE" ? 3 : 8;
-      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? dangerWeight * 0.75 : dangerWeight);
+      const iglPlanning = activeRolePlayer(team, "IGL") ? 1 + roleSkill(team, "IGL", "decisionMaking") * 0.006 : 1;
+      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? dangerWeight * 0.75 : dangerWeight) * iglPlanning;
       return { location, score: distance * 0.65 + dangerPenalty - lootBonus - highGroundBonus };
     }).sort((a, b) => a.score - b.score)[0]?.location;
     const targetX = destination?.x ?? match.stormTarget.x;
@@ -438,6 +471,10 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
     if (team.strategy === "PRUDENT") willingnessToFight *= 0.55;
     if (team.strategy === "OPPORTUNISTIC") willingnessToFight *= powerDifference > 0 ? 1.45 : 0.65;
     if (team.strategy === "STRATEGIC") willingnessToFight *= 0.9;
+    const fragger = activeRolePlayer(team, "FRAGGER");
+    if (fragger) willingnessToFight *= 0.9 + fragger.skills.aim * 0.002;
+    const scout = activeRolePlayer(team, "SCOUT");
+    if (scout && averageHealth > 0.45) willingnessToFight *= 1.05;
     if (random.next() > Math.min(0.9, willingnessToFight)) continue;
 
     engaged.add(team.id);
@@ -489,7 +526,8 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     case "DISENGAGE": {
       const candidates = match.map.locations.filter(candidate => candidate.id !== match.currentLocationId && isInsideStorm(candidate.x, candidate.y, match.stormTarget));
       const pool = candidates.length ? candidates : match.map.locations.filter(candidate => candidate.id !== match.currentLocationId);
-      const destination = pool.sort((a, b) => (a.danger * 3 + Math.hypot(a.x-match.stormTarget.x,a.y-match.stormTarget.y)*0.02) - (b.danger * 3 + Math.hypot(b.x-match.stormTarget.x,b.y-match.stormTarget.y)*0.02))[0] ?? nearestLocation(match, random);
+      const iglPlanning = activeRolePlayer(match.userTeam, "IGL") ? 1 + roleSkill(match.userTeam, "IGL", "decisionMaking") * 0.01 : 1;
+      const destination = pool.sort((a, b) => ((a.danger * 3 * iglPlanning) + Math.hypot(a.x-match.stormTarget.x,a.y-match.stormTarget.y)*0.02) - ((b.danger * 3 * iglPlanning) + Math.hypot(b.x-match.stormTarget.x,b.y-match.stormTarget.y)*0.02))[0] ?? nearestLocation(match, random);
       moveTeam(match, destination);
       event(match, "INFO", "Désengagement", `Ton équipe rompt le combat et rejoint ${destination.name} pour se replacer.`);
       break;
@@ -578,7 +616,7 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     case "ROTATE": {
       const destination = match.map.locations.find(l => l.id === action.locationId) ?? nearestLocation(match, random);
       moveTeam(match, destination);
-      if (random.next() < destination.danger / 220) {
+      if (random.next() < destination.danger / 220 * rotationRiskMultiplier(match.userTeam)) {
         const report = fight(match, random);
         event(match, "INFO", "Rencontre sur la rotation", report.summary);
       }
