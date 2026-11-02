@@ -23,3 +23,7 @@
 .health-fill.downed{background:var(--red)}
 .team-player:has(.health-fill.downed) .player-name{color:#ff9ca5}
 @media(max-width:560px){.equipment-icon{width:34px;height:34px;flex-basis:34px}.fight-odds{min-width:55px}}
+
+/* Storm contraction and resource dashboard */
+.next-storm-circle{position:absolute;border:2px dashed #ffe08a;border-radius:50%;background:#ffdc7210;box-shadow:0 0 14px #ffdc7255;pointer-events:none;transition:all 1.5s ease;z-index:1}.storm-circle{transition:all 1.5s ease;z-index:2}.poi{z-index:3}
+.materials-panel{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.materials-title{display:flex;justify-content:space-between;font-size:9px;font-weight:900;letter-spacing:1.3px;color:#dce9f8;margin-bottom:10px}.materials-title small{font-size:8px;color:var(--muted)}.material-row{display:grid;grid-template-columns:76px minmax(45px,1fr) 66px;align-items:center;gap:8px;margin:9px 0;font-size:9px;color:#c5d4e6}.material-row>b{text-align:right;font-size:9px;color:#fff}.material-track{height:7px;background:#26364a;border-radius:9px;overflow:hidden}.material-track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#4f9e77,#7ce2a8);border-radius:9px;transition:width .5s ease}

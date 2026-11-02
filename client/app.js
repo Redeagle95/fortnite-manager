@@ -45,7 +45,7 @@ function sendSpawnAction(type) {
 }
 function sendZoneAction(type) {
   const action = { type };
-  if (type === "ROTATE") action.locationId = $("rotation-location").value;
+  if (type === "ROTATE" || type === "FIGHT_THEN_ROTATE") action.locationId = $("rotation-location").value;
   if (type === "HEAL") {
     const heal = currentMatch.userTeam.inventory.items.find(item => item.kind === "HEAL");
     if (heal) action.itemDefinitionId = heal.definitionId;
@@ -56,7 +56,15 @@ function renderMap(match) {
   const width = match.map.width, height = match.map.height;
   const storm = match.storm;
   const diameter = storm.radius * 2 / width * 100;
-  $("storm-circle").style.cssText = `width:${diameter}%;height:${diameter}%;left:${storm.x / width * 100 - diameter / 2}%;top:${storm.y / height * 100 - diameter / 2}%;`;
+  const circleStyle = "width:" + diameter + "%;height:" + diameter + "%;left:" + (storm.x / width * 100 - diameter / 2) + "%;top:" + (storm.y / height * 100 - diameter / 2) + "%;";
+  $("storm-circle").style.cssText = circleStyle;
+  const nextPhase = match.stage === "DROP" ? match.phases[0] : match.phases[match.phaseIndex];
+  const nextCircle = $("next-storm-circle");
+  if (nextPhase && match.stage !== "FINISHED") {
+    const nextDiameter = nextPhase.radius * 2 / width * 100;
+    nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (storm.x / width * 100 - nextDiameter / 2) + "%;top:" + (storm.y / height * 100 - nextDiameter / 2) + "%;";
+    nextCircle.classList.remove("hidden");
+  } else nextCircle.classList.add("hidden");
   $("poi-layer").innerHTML = match.map.locations.map(location => {
     const isUser = location.id === match.currentLocationId;
     return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}</button>`;
@@ -71,7 +79,7 @@ function renderMap(match) {
   }));
   $("zone-label").textContent = match.stage === "FINISHED" ? "PARTIE TERMINÉE" : `ZONE ${Math.min(match.phaseIndex + 1, match.phases.length)} · RAYON ${Math.round(storm.radius)}`;
 }
-function estimateTeamPower(team) {
+function estimateTeamPower(team, style) {
   const players = team.players.filter(p => p.alive && !p.knocked);
   if (!players.length) return 0;
   const skill = players.reduce((sum, p) => sum + (p.skills.overall * .25 + p.skills.aim * .18 + p.skills.building * .18 + p.skills.gameSense * .16 + p.skills.positioning * .12 + p.skills.teamwork * .11), 0) / players.length;
@@ -79,51 +87,49 @@ function estimateTeamPower(team) {
   const gear = Math.max(10, Math.min(100, weapon));
   const health = players.reduce((sum, p) => sum + p.health + p.shield * .6, 0) / players.length / 2;
   const buildBonus = Math.min(12, team.builds * 1.5) + Math.min(10, (team.resources.wood + team.resources.stone + team.resources.metal) / 100);
-  return skill * .65 + gear * .2 + health * .1 + buildBonus * .05;
+  const weights = style === "HEIGHT" ? {ASSAULT_RIFLE:1.25,SNIPER:1.5,SHOTGUN:.55,SMG:.65,PISTOL:.7} : style === "MID" ? {ASSAULT_RIFLE:1,SNIPER:.55,SHOTGUN:1.5,SMG:1,PISTOL:.75} : style === "LOW" ? {ASSAULT_RIFLE:.8,SNIPER:.45,SHOTGUN:1.15,SMG:1.5,PISTOL:.9} : {ASSAULT_RIFLE:1.1,SNIPER:1.35,SHOTGUN:.65,SMG:.85,PISTOL:.75};
+  const scores = style ? team.inventory.weapons.map(w => Math.min(100,w.damage/1.2)*weights[w.category]).sort((a,b)=>b-a).slice(0,3) : [];
+  const utility = team.inventory.items.filter(i => i.kind === "UTILITY").reduce((n,i) => n + i.quantity, 0);
+  const weaponBonus = scores.length ? Math.min(15,scores.reduce((a,b)=>a+b,0)/scores.length*.12 + (style === "OUTSIDE" ? Math.min(5,utility*1.5) : 0)) : 0;
+  return skill * .65 + gear * .2 + health * .1 + buildBonus * .05 + weaponBonus;
 }
-function fightPreview(match) {
-  const enemies = match.teams.filter(t => !t.isUser && t.alive);
-  if (!enemies.length) return { chance: 100, enemy: "Aucun adversaire" };
+function fightPreview(match, style) {
+  const enemies = match.teams.filter(t => !t.isUser && t.alive && (match.stage !== "DROP" || t.dropLocationId === match.selectedDropId));
+  if (!enemies.length) return { chance: 100, enemy: "Aucun adversaire sur ce spot" };
   const sameSpot = enemies.filter(t => t.dropLocationId === match.currentLocationId);
   const pool = sameSpot.length ? sameSpot : enemies;
   pool.sort((a,b) => Math.hypot(a.position.x-match.userTeam.position.x,a.position.y-match.userTeam.position.y)-Math.hypot(b.position.x-match.userTeam.position.x,b.position.y-match.userTeam.position.y));
   const enemy = pool[0];
-  const positioning = match.userTeam.position.y < 5000 ? 4 : 0;
+  const positioning = style === "HEIGHT" ? 7 : style === "MID" ? 3 : style === "LOW" ? 1 : style === "OUTSIDE" ? -2 : 0;
   const builds = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
-  const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam) - estimateTeamPower(enemy)) * .72 + positioning + builds));
+  const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam, style) - estimateTeamPower(enemy)) * .72 + positioning + builds));
   return { chance: Math.round(chance), enemy: enemy.name };
 }
-function actionsForLocation(match) {
-  const location = match.map.locations.find(l => l.id === match.currentLocationId);
-  const tags = location ? location.tags.join(" ").toLowerCase() : "";
-  let actions = [...zoneActions];
-  if (tags.includes("forêt") || tags.includes("ferme") || tags.includes("calme")) actions = actions.filter(a => ["REFRESH","LOOT","ROTATE","HEAL","HOLD_POSITION"].includes(a.type));
-  else if (tags.includes("hauteur") || tags.includes("montagne") || tags.includes("position")) actions = actions.filter(a => ["HOLD_POSITION","FIGHT","ROTATE","HEAL","LOOT"].includes(a.type));
-  else if (tags.includes("ville") || tags.includes("hot drop") || tags.includes("port")) actions = actions.filter(a => ["FIGHT","LOOT","ROTATE","HEAL","REFRESH"].includes(a.type));
-  else if (tags.includes("industriel") || tags.includes("métal")) actions = actions.filter(a => ["REFRESH","LOOT","FIGHT","ROTATE","HEAL","HOLD_POSITION"].includes(a.type));
-  if (match.userTeam.players.some(p => p.alive && p.knocked) && match.userTeam.players.some(p => p.alive && !p.knocked)) {
-    actions.unshift({ type: "REVIVE", label: "Réanimer un équipier", description: "Un mate est à terre : le relever avec 30 PV.", risk: "MEDIUM" });
-  }
+function actionsForZone(match) {
+  let actions;
+  if (match.phaseIndex === 1) actions = [{type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer la force, la vie et le stuff des deux équipes.",risk:"HIGH"},{type:"REFRESH",label:"Farmer les matériaux",description:"Récolter bois, pierre et métal (500 maximum chacun).",risk:"LOW"}];
+  else if (match.phaseIndex === 2) actions = [{type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},{type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"}];
+  else if (match.phaseIndex === 3) actions = [{type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},{type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},{type:"REFRESH",label:"Refresh matériaux",description:"Compléter les ressources de l’équipe.",risk:"LOW"}];
+  else actions = [{type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},{type:"FIGHT_MID",label:"Jouer au milieu",description:"Synergie renforcée avec les pompes.",risk:"HIGH",style:"MID"},{type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},{type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}];
+  if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV. Au moins un joueur doit rester actif.",risk:"MEDIUM"});
   return actions;
 }
-
 function renderActions(match) {
-  const actions = match.stage === "DROP" ? spawnActions : actionsForLocation(match);
-  $("decision-title").textContent = match.stage === "DROP" ? "Tu viens d'atterrir. Que fais-tu ?" : match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : `Phase ${match.phaseIndex + 1} · ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
-  $("decision-description").textContent = match.stage === "DROP" ? "Les adversaires présents sur ton spot peuvent contester ton loot." : match.stage === "FINISHED" ? `Classement final : #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s).` : "Les choix proposés s’adaptent au lieu où se trouve ton équipe.";
+  const actions = match.stage === "DROP" ? spawnActions : actionsForZone(match);
+  const zoneNumber = match.stage === "DROP" ? 1 : Math.min(5, match.phaseIndex + 1);
+  $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
+  $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : "Le pourcentage tient compte de ton équipement et de la position choisie.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
-  const preview = fightPreview(match);
   $("action-list").innerHTML = actions.map(a => {
-    const badge = a.type === "FIGHT"
-      ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>'
-      : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
-    const details = a.type === "FIGHT"
-      ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire estimé : ' + escapeHtml(preview.enemy) + '</small>'
-      : '';
+    const style = a.style || (a.type === "FIGHT_HEIGHT" ? "HEIGHT" : a.type === "FIGHT_MID" ? "MID" : a.type === "FIGHT_LOW" ? "LOW" : a.type === "FIGHT_OUTSIDE" ? "OUTSIDE" : undefined);
+    const isFight = ["FIGHT","FIGHT_THEN_ROTATE","FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"].includes(a.type);
+    const preview = isFight ? fightPreview(match, style) : null;
+    const badge = preview ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>' : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
+    const details = preview ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire : ' + escapeHtml(preview.enemy) + '</small>' : '';
     return '<button class="action-button" data-action="' + a.type + '"><span><b>' + a.label + '</b><small>' + a.description + '</small>' + details + '</span>' + badge + '</button>';
   }).join("");
   document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => match.stage === "DROP" ? sendSpawnAction(button.dataset.action) : sendZoneAction(button.dataset.action)));
-  $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" ? false : !actions.some(a => a.type === "ROTATE"));
+  $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" || !actions.some(a => a.type === "ROTATE" || a.type === "FIGHT_THEN_ROTATE"));
 }
 function equipmentIcon(id) {
   const safeId = /^[a-z0-9-]+$/.test(id || "") ? id : "ammo";
@@ -137,6 +143,9 @@ function renderTeam(team) {
   $("wood").textContent = team.resources.wood;
   $("stone").textContent = team.resources.stone;
   $("metal").textContent = team.resources.metal;
+  $("wood-bar").style.width = (team.resources.wood / 500 * 100) + "%";
+  $("stone-bar").style.width = (team.resources.stone / 500 * 100) + "%";
+  $("metal-bar").style.width = (team.resources.metal / 500 * 100) + "%";
   $("inventory-list").innerHTML = Array.from({ length: 5 }, (_, i) => {
     const weapon = team.inventory.weapons[i];
     return '<div class="inventory-slot"><span class="gear-name">' + (weapon ? equipmentIcon(weapon.definitionId) : equipmentIcon("empty-slot")) + '<span>' + (weapon ? escapeHtml(weapon.name) : "Slot vide") + '</span></span><b class="' + (weapon ? "rarity-" + weapon.rarity : "") + '">' + (weapon ? weapon.rarity : "—") + '</b></div>';
@@ -150,11 +159,11 @@ function renderMatch(match) {
   currentMatch = match;
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
-  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Choisis ton premier move" : `Zone ${Math.max(1, match.phaseIndex)}`;
+  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(5, match.phaseIndex + 1);
   $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
-  $("phase-number").textContent = match.stage === "DROP" ? "DROP" : match.stage === "FINISHED" ? "FIN" : match.phaseIndex + "/" + match.phases.length;
+  $("phase-number").textContent = match.stage === "DROP" ? "1/5" : match.stage === "FINISHED" ? "FIN" : Math.min(5, match.phaseIndex + 1) + "/5";
   renderMap(match);
   renderActions(match);
   renderTeam(match.userTeam);

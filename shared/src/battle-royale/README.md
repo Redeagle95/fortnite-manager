@@ -42,3 +42,17 @@ The server registers these events:
 Matches currently live in server memory and are cleared when the server restarts. Add a persistent store before using this for production multiplayer.
 
 The simulation map and loot tables are original placeholders designed for gameplay prototyping, not copied Fortnite assets or official Epic Games data.
+
+
+## Five-zone match flow
+
+The strategic match is split into five decisions:
+1. **Spawn:** stay on the selected drop if contested (with an estimated fight percentage), loot safely, or choose another drop.
+2. **Zone 2:** take a rotation fight or refresh materials. Wood, stone and metal are each capped at 500 and shown with separate progress bars.
+3. **Zone 3:** rotate immediately, or take a fight before rotating.
+4. **Zone 4:** fight on the rotation, move ahead of the storm, or refresh materials.
+5. **Final zone:** choose height, mid, low or outside play. Estimated odds account for team ratings, active players, health/shield, weapon loadout, materials and the selected weapon/position synergy.
+
+The storm map shows the current safe circle and a dashed preview of the next contraction. The circle visibly shrinks as each decision is completed. Bot squads receive randomized weapons and materials so their combat strength is not based on ratings alone.
+
+Knockdowns and revives remain active throughout the match: a downed teammate can be revived to 30 health while at least one teammate remains active; if the whole squad is down, the team is eliminated.

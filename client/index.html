@@ -36,12 +36,12 @@
       <div class="game-layout">
         <section class="map-card">
           <div class="map-topline"><span>CARTE TACTIQUE</span><span id="zone-label">ZONE INITIALE</span></div>
-          <div id="battle-map" class="battle-map"><div class="island"></div><div id="storm-circle" class="storm-circle"></div><div id="poi-layer"></div><div class="map-compass">N ↑</div></div>
+          <div id="battle-map" class="battle-map"><div class="island"></div><div id="storm-circle" class="storm-circle"></div><div id="next-storm-circle" class="next-storm-circle"></div><div id="poi-layer"></div><div class="map-compass">N ↑</div></div>
           <div class="map-legend"><span><i class="legend-user"></i> Ton équipe</span><span><i class="legend-poi"></i> Lieux</span><span><i class="legend-storm"></i> Tempête</span></div>
         </section>
         <aside class="side-panel">
           <section class="decision-card"><div class="card-kicker">DÉCISION SUIVANTE</div><h2 id="decision-title">Où veux-tu atterrir ?</h2><p id="decision-description">Analyse le danger et le potentiel de loot de ton spot.</p><div id="action-list" class="action-list"></div></section>
-          <section class="team-card"><div class="card-kicker">TON ÉQUIPE</div><div id="team-list"></div><div class="resources"><span>🪵 <b id="wood">0</b></span><span>🧱 <b id="stone">0</b></span><span>🔩 <b id="metal">0</b></span></div></section>
+          <section class="team-card"><div class="card-kicker">TON ÉQUIPE</div><div id="team-list"></div><div class="materials-panel"><div class="materials-title">MATÉRIAUX <small>MAX. 500 PAR TYPE</small></div><div class="material-row"><span>🪵 Bois</span><div class="material-track"><i id="wood-bar"></i></div><b><span id="wood">0</span>/500</b></div><div class="material-row"><span>🧱 Pierre</span><div class="material-track"><i id="stone-bar"></i></div><b><span id="stone">0</span>/500</b></div><div class="material-row"><span>🔩 Métal</span><div class="material-track"><i id="metal-bar"></i></div><b><span id="metal">0</span>/500</b></div></div></section>
           <section class="inventory-card"><div class="card-kicker">INVENTAIRE · 5 SLOTS</div><div id="inventory-list"></div><div id="consumables-list" class="consumables-list"></div></section>
         </aside>
       </div>
