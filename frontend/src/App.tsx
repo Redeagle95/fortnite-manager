@@ -3,6 +3,7 @@ import { Activity, Bell, Check, ChevronDown, ChevronRight, CircleHelp, Crown, Ga
 import LobbyScene from "./LobbyScene";
 import { formatSeasonDate, resolveSeason } from "./seasons/seasonResolver";
 import { seasonRegistry } from "./seasons/seasonRegistry";
+import { outfits, type Outfit } from "./outfits";
 import "./styles.css";
 
 const navItems = [
@@ -17,7 +18,12 @@ function App() {
   const [activeNav, setActiveNav] = useState("Jouer");
   const [mode, setMode] = useState("Solo");
   const [ready, setReady] = useState(false);
-  const [skin, setSkin] = useState(0);
+  const [skinId, setSkinId] = useState("nova");
+  const [owned, setOwned] = useState<string[]>(["nova", "mistral"]);
+  const [vbucks, setVbucks] = useState(3850);
+  const [wardrobeTab, setWardrobeTab] = useState<"shop" | "locker" | null>(null);
+  const [notice, setNotice] = useState("");
+  const equipped = outfits.find(item => item.id === skinId) ?? outfits[0];
   const [victory, setVictory] = useState(false);
   const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
   const [seasonMenu, setSeasonMenu] = useState(false);
@@ -46,8 +52,9 @@ function App() {
     setPanelMessage(label === "Jouer" ? "" : label + " — espace de jeu en cours de construction");
   };
 
+  const buyOutfit = (item: Outfit) => { if (owned.includes(item.id)) { setSkinId(item.id); setNotice(item.name+" équipé !"); return; } if(vbucks<item.price){setNotice("Crédits insuffisants.");return;} setVbucks(v=>v-item.price);setOwned(v=>[...v,item.id]);setSkinId(item.id);setNotice(item.name+" ajouté au casier !"); };
   return <main className="lobby-shell" style={{ "--accent": season.accent, "--sky": season.sky } as React.CSSProperties}>
-    <div className="scene-layer"><Suspense fallback={<div className="scene-loading"><span className="loading-orb"/>Chargement de l'île…</div>}><LobbyScene season={season} skin={skin} victory={victory} quality={quality}/></Suspense></div>
+    <div className="scene-layer"><Suspense fallback={<div className="scene-loading"><span className="loading-orb"/>Chargement de l'île…</div>}><LobbyScene season={season} skin={equipped} victory={victory} quality={quality}/></Suspense></div>
     <div className="scene-vignette"/>
     <header className="lobby-top">
       <button className="game-brand" onClick={() => chooseNav("Jouer")} aria-label="Retour au lobby"><span className="brand-emblem"><Gamepad2 size={22}/></span><span><strong>DROPZONE</strong><small>COMPETITIVE UNIVERSE</small></span></button>
@@ -55,7 +62,7 @@ function App() {
         {["Jouer","Compétitions","Carrière","Classement"].map((item)=><button key={item} className={activeNav===item?"top-link active":"top-link"} onClick={()=>chooseNav(item)}>{item.toUpperCase()}</button>)}
       </nav>
       <div className="top-right">
-        <div className="currency"><span className="coin">V</span><strong>1 250</strong><button aria-label="Ouvrir la boutique" onClick={()=>chooseNav("Boutique")}>+</button></div>
+        <div className="currency"><span className="coin">D</span><strong>{vbucks.toLocaleString("fr-FR")}</strong><button aria-label="Ouvrir la boutique" onClick={()=>{setWardrobeTab("shop");chooseNav("Boutique");}}>+</button></div>
         <button className="top-icon" aria-label="Notifications" onClick={()=>setNotifications(v=>!v)}><Bell size={19}/><i/></button>
         <button className="top-icon" aria-label="Paramètres" onClick={()=>setSettingsOpen(v=>!v)}><Settings size={19}/></button>
         <button className="player-chip" onClick={()=>chooseNav("Profil")}><span className="player-avatar">P1</span><span><b>PLAYER_01</b><small>NIVEAU 42</small></span><ChevronDown size={14}/></button>
@@ -73,7 +80,7 @@ function App() {
       <div className="season-story"><span className="eyebrow">SAISON {season.year}</span><h1>{season.title}</h1><p>{season.description}</p><div className="location-line"><Globe2 size={14}/>{season.location}</div></div>
       <div className="side-divider"/>
       <div className="side-section-title">MENU PRINCIPAL</div>
-      <nav className="side-nav">{navItems.map(({label,icon:Icon})=><button key={label} className={activeNav===label?"side-link active":"side-link"} onClick={()=>chooseNav(label)}><Icon size={18}/><span>{label}</span>{label==="Compétitions"&&<i className="nav-live-dot"/>}</button>)}</nav>
+      <nav className="side-nav">{navItems.map(({label,icon:Icon})=><button key={label} className={activeNav===label?"side-link active":"side-link"} onClick={()=>{if(label==="Boutique"||label==="Casier"){setWardrobeTab(label==="Boutique"?"shop":"locker");setPanelMessage("");}else setWardrobeTab(null);chooseNav(label);}}><Icon size={18}/><span>{label}</span>{label==="Compétitions"&&<i className="nav-live-dot"/>}</button>)}</nav>
       <div className="sidebar-footer"><span className="online-dot"/><span>RÉGION EUROPE</span><b>ONLINE</b></div>
     </aside>
 
@@ -84,6 +91,8 @@ function App() {
       <div className="season-next"><span>PROCHAINE ÈRE</span><strong>{nextSeason.year} · {nextSeason.subtitle}</strong><button onClick={()=>moveSeason(1)} disabled={seasonIndex===seasonRegistry.length-1}>Découvrir <ChevronRight size={14}/></button></div>
     </section>
 
+    {wardrobeTab && <section className="wardrobe-panel"><div className="wardrobe-head"><div><span className="eyebrow">{wardrobeTab==="shop"?"COLLECTION COSMÉTIQUE":"TON INVENTAIRE"}</span><h2>{wardrobeTab==="shop"?"Boutique des tenues":"Casier"}</h2><p>{wardrobeTab==="shop"?"Découvre des styles originaux pour ton personnage.":"Équipe une tenue que tu possèdes."}</p></div><button className="wardrobe-close" onClick={()=>setWardrobeTab(null)}>×</button></div><div className="wardrobe-tabs"><span>◈ {vbucks.toLocaleString("fr-FR")} crédits</span><small> ACHATS DE DÉMONSTRATION </small></div><div className="outfit-grid">{outfits.filter(item=>wardrobeTab==="shop"||owned.includes(item.id)).map(item=><article className="outfit-card" key={item.id}><div className="outfit-art" style={{"--outfit-a":item.colors[0],"--outfit-b":item.colors[1],"--outfit-c":item.colors[2]} as React.CSSProperties}><div className="mini-character"><i/><b/><em/><span/></div><label>{item.rarity}</label></div><div className="outfit-info"><strong>{item.name}</strong><p>{item.description}</p><button onClick={()=>{if(wardrobeTab==="shop")buyOutfit(item);else if(owned.includes(item.id)){setSkinId(item.id);setNotice(item.name+" équipé !");}}}>{skinId===item.id?"ÉQUIPÉ":owned.includes(item.id)?"ÉQUIPER":item.price.toLocaleString("fr-FR")+" CRÉDITS"}</button></div></article>)}</div><p className="wardrobe-foot">Aucun paiement réel · les crédits sont fictifs et locaux.</p></section>}
+    {notice&&<div className="wardrobe-toast">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
     {panelMessage&&<div className="coming-panel"><button className="panel-x" onClick={()=>setPanelMessage("")}>×</button><span className="eyebrow">DROPZONE · APERÇU</span><h2>{panelMessage}</h2><p>Le lobby 3D et le système de saisons sont prioritaires dans cette première étape.</p><button onClick={()=>chooseNav("Jouer")}>Retourner au lobby</button></div>}
 
     <footer className="lobby-bottom">
@@ -91,7 +100,7 @@ function App() {
       <div className="queue-status"><span className={ready?"status-dot searching":"status-dot"}/><span><b>{ready?"PRÊT POUR LE MATCH":"EN ATTENTE"}</b><small>{ready?`File ${mode} · Aperçu local`:"Choisis ton mode et prépare-toi"}</small></span></div>
       <button className={ready?"ready-button is-ready":"ready-button"} onClick={()=>setReady(v=>!v)}>{ready?<><Check size={20}/> PRÊT</>:<><Zap size={20}/> JOUER</>}</button>
     </footer>
-    <div className="character-actions"><button onClick={()=>{setSkin(v=>(v+1)%4);setVictory(false);}}><UserRound size={15}/> CHANGER DE TENUE</button><button onClick={()=>setVictory(v=>!v)}><Sparkles size={15}/>{victory?"ARRÊTER L'EMOTE":"EMOTE VICTOIRE"}</button></div>
+    <div className="character-actions"><button onClick={()=>{setWardrobeTab("locker");setActiveNav("Casier");}}><UserRound size={15}/> OUVRIR LE CASIER</button><button onClick={()=>setVictory(v=>!v)}><Sparkles size={15}/>{victory?"ARRÊTER L'EMOTE":"EMOTE VICTOIRE"}</button></div>
     <div className="lobby-season-stamp"><span>SAISON ACTIVE</span><strong>{season.year}</strong><small>{season.subtitle}</small><div>{formatSeasonDate(season.startsAt)}</div></div>
     <div className="quality-hint"><CircleHelp size={13}/> Rendu 3D temps réel · {quality==="low"?"Faible":quality==="medium"?"Moyen":"Élevé"}</div>
   </main>;
