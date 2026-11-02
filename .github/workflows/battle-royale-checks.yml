@@ -11,6 +11,9 @@ on:
       - feat/extended-zones-team-kill-counters
       - feat/deep-competitive-gameplay
       - feat/meaningful-team-roles
+      - feat/advanced-mobile-endgame
+      - feat/meaningful-team-roles
+      - feat/advanced-mobile-endgame
   pull_request:
     branches:
       - main
