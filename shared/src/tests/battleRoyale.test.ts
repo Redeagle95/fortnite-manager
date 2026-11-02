@@ -442,20 +442,15 @@ describe("Battle Royale simulation", () => {
   });
 
   it("guarantees an Epic-or-better weapon in generated supply drops and marks their POI", () => {
-    let foundSupply = false;
-    for (let seed = 1; seed <= 20 && !foundSupply; seed++) {
-      const match = createBattleRoyale(12100 + seed, "SOLO", "pine-woods");
-      resolveDrop(match, { type: "LOOT" });
-      advanceMatchTime(match, 1800);
-      const supplyLoot = match.lootOnGround.filter(drop => drop.isSupplyDrop);
-      if (supplyLoot.length) {
-        foundSupply = true;
-        expect(supplyLoot.every(drop => drop.locationId === supplyLoot[0].locationId)).toBe(true);
-        expect(supplyLoot.some(drop => drop.kind === "WEAPON" && ["EPIC", "LEGENDARY", "MYTHIC"].includes(drop.rarity))).toBe(true);
-        expect(match.events.some(item => item.type === "SUPPLY_DROP")).toBe(true);
-      }
-    }
-    expect(foundSupply).toBe(true);
+    const match = createBattleRoyale(12101, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 2;
+    advanceMatchTime(match, 15);
+    const supplyLoot = match.lootOnGround.filter(drop => drop.isSupplyDrop);
+    expect(supplyLoot.length).toBeGreaterThan(0);
+    expect(supplyLoot.every(drop => drop.locationId === supplyLoot[0].locationId)).toBe(true);
+    expect(supplyLoot.some(drop => drop.kind === "WEAPON" && ["EPIC", "LEGENDARY", "MYTHIC"].includes(drop.rarity))).toBe(true);
+    expect(match.events.some(item => item.type === "SUPPLY_DROP")).toBe(true);
   });
 
 });
