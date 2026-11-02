@@ -223,8 +223,25 @@ function renderEvents(events) {
     ? eliminations.map(item => `<div class="elimination-row"><b>${escapeHtml(item.description)}</b><small>Zone ${Math.min(7, item.phase + 1)} · ${new Date(item.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>`).join("")
     : '<p class="empty-feed">Aucune élimination pour le moment. Les affrontements entre équipes apparaîtront ici.</p>';
 }
+function readFncsSeries() {
+  try { return JSON.parse(localStorage.getItem("fortnite-manager-fncs-series") || '{"number":1,"results":[]}'); }
+  catch { return {number:1,results:[]}; }
+}
+function renderFncsSeries(match) {
+  const series = readFncsSeries();
+  if (match.stage === "FINISHED" && !series.results.some(result => result.id === match.id)) {
+    if (series.results.length >= 6) { series.number += 1; series.results = []; }
+    series.results.push({id:match.id,points:match.totalPoints,placement:match.finalPlacement,kills:match.userTeam.eliminations});
+    try { localStorage.setItem("fortnite-manager-fncs-series", JSON.stringify(series)); } catch {}
+  }
+  const points = series.results.reduce((sum,result)=>sum+result.points,0);
+  const best = series.results.length ? Math.min(...series.results.map(result=>result.placement)) : "—";
+  const target = $("series-info");
+  if (target) target.innerHTML = '<div class="location-stat"><span>Série FNCS</span><b>#' + series.number + '</b></div><div class="location-stat"><span>Parties jouées</span><b>' + series.results.length + '/6</b></div><div class="location-stat"><span>Total de points</span><b>' + points + ' pts</b></div><div class="location-stat"><span>Meilleur placement</span><b>#' + best + '</b></div><div class="series-results">' + (series.results.length ? series.results.map((result,index)=>'<span>Game ' + (index+1) + ' · #' + result.placement + ' · ' + result.points + ' pts</span>').join('') : '<small>Aucune partie terminée dans cette série.</small>') + '</div>';
+}
 function renderMatch(match) {
   currentMatch = match;
+  renderFncsSeries(match);
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
   $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(7, match.phaseIndex + 1);
