@@ -21,4 +21,16 @@ match = takeZoneAction(match, { type: "REFRESH" });
 match = takeZoneAction(match, { type: "ROTATE", locationId: "crown-hill" });
 ```
 
-The simulation is deterministic for a given seed and sequence of actions. The map and loot tables are original placeholders designed for gameplay prototyping, not copied Fortnite assets or official Epic Games data.
+The simulation is deterministic for a given seed and sequence of actions. You can pass one overall rating per teammate as the fifth argument to `createBattleRoyale`; each rating must be between 0 and 100.
+
+## Socket.IO events
+The server registers these events:
+- `battle:create`: `{ seed, mode, dropLocationId, playerRatings? }`
+- `battle:drop`: `{ matchId, action: "FIGHT" | "LOOT" | "ROTATE", locationId? }`
+- `battle:action`: `{ matchId, action }`
+- `battle:get`: `{ matchId }`
+- Server replies with `battle:state` or `battle:error`.
+
+Matches currently live in server memory and are cleared when the server restarts. Add a persistent store before using this for production multiplayer.
+
+The simulation map and loot tables are original placeholders designed for gameplay prototyping, not copied Fortnite assets or official Epic Games data.
