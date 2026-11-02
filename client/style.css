@@ -48,3 +48,12 @@
 .surge-track{height:8px;background:#29374a;border-radius:8px;overflow:hidden;margin:8px 0}
 .surge-track i{display:block;height:100%;background:linear-gradient(90deg,#e5a44f,#56d7a1);transition:width .4s ease}
 .surge-danger{color:#ff8994!important}
+
+/* Competitive gameplay additions */
+.ground-loot{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.ground-loot-row{display:grid;gap:6px;padding:8px 0;border-bottom:1px solid #25354a;font-size:10px}
+.ground-loot-row>div{display:flex;flex-wrap:wrap;gap:5px}
+.loot-pickup{border:1px solid #3a5876;background:#1a3047;color:#eaf4ff;border-radius:5px;padding:5px 7px;font-size:9px;cursor:pointer}
+.loot-pickup:hover{border-color:var(--cyan)}
+.ground-loot-row small{font-size:8px}
+.player-name{line-height:1.4}
