@@ -448,8 +448,10 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
     case "FARM_HALF_ROTATE": {
       const gained = farmToTarget(match.userTeam, 250);
-      const destination = match.map.locations.filter(candidate => candidate.id !== match.currentLocationId)
-        .sort((a, b) => Math.hypot(a.x - match.stormTarget.x, a.y - match.stormTarget.y) - Math.hypot(b.x - match.stormTarget.x, b.y - match.stormTarget.y))[0] ?? nearestLocation(match, random);
+      const otherLocations = match.map.locations.filter(candidate => candidate.id !== match.currentLocationId);
+      const safeLocations = otherLocations.filter(candidate => isInsideStorm(candidate.x, candidate.y, match.stormTarget));
+      const destinationPool = safeLocations.length ? safeLocations : otherLocations;
+      const destination = destinationPool.sort((a, b) => Math.hypot(a.x - match.stormTarget.x, a.y - match.stormTarget.y) - Math.hypot(b.x - match.stormTarget.x, b.y - match.stormTarget.y))[0] ?? nearestLocation(match, random);
       event(match, "FARM", "Farm à moitié", `Récolte intermédiaire : +${gained} matériaux, objectif 250 par type. Rotation anticipée vers ${destination.name}.`);
       moveTeam(match, destination);
       break;
