@@ -68,17 +68,8 @@ function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
 
 function Scene({season,skin,victory,quality}:Props) {
   const particles=quality==="low"?20:quality==="medium"?45:85;
-  const atlas = useLoader(THREE.TextureLoader, "/lobbies/season-lobby-atlas.webp");
-  const backgroundTexture = useMemo(() => {
-    const texture = atlas.clone();
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.repeat.set(0.5, 0.25);
-    const column = season.backgroundCell % 2;
-    const row = Math.floor(season.backgroundCell / 2);
-    texture.offset.set(column * 0.5, 1 - (row + 1) * 0.25);
-    texture.needsUpdate = true;
-    return texture;
-  }, [atlas, season.backgroundCell]);
+  const backgroundTexture = useLoader(THREE.TextureLoader, "/lobbies/imafor.png");
+  backgroundTexture.colorSpace = THREE.SRGBColorSpace;
   return <>
     <primitive attach="background" object={backgroundTexture}/>
     <ambientLight intensity={quality==="low"?1.1:.75}/>
