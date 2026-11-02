@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fortnite Manager — Battle Royale</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">BR</span><span>FORTNITE <b>MANAGER</b><small>BATTLE ROYALE SIMULATOR</small></span></a>
+    <div class="connection"><i id="connection-dot"></i><span id="connection-label">Connexion…</span></div>
+  </header>
+  <main class="shell">
+    <section id="setup-panel" class="setup-panel">
+      <div class="eyebrow">MODE DE JEU · SIMULATION STRATÉGIQUE</div>
+      <h1>Prépare ton <span>drop.</span></h1>
+      <p class="intro">Choisis ton mode, ton point d'atterrissage et le niveau de tes mates. Chaque décision peut changer ta partie.</p>
+      <div class="setup-grid">
+        <label>Mode de jeu<select id="mode"><option value="SOLO">Solo</option><option value="DUO">Duo</option><option value="TRIO" selected>Trio</option><option value="SQUAD">Squad</option></select></label>
+        <label>Point d'atterrissage<select id="drop-location"></select></label>
+        <label>Seed de partie<input id="seed" type="number" value="20261102"></label>
+      </div>
+      <div class="ratings-head"><div><b>Évaluation de l'équipe</b><span>Note générale de chaque joueur · 0 à 100</span></div><div id="ratings-fields" class="ratings-fields"></div></div>
+      <button id="start-button" class="primary-button">LANCER LA PARTIE <span>→</span></button>
+    </section>
+
+    <section id="game-panel" class="game-panel hidden">
+      <div class="game-heading">
+        <div><div class="eyebrow">BATTLE ROYALE · ISLAND ROYALE</div><h1 id="phase-title">À toi de jouer</h1><p id="phase-subtitle">Choisis ta prochaine décision.</p></div>
+        <div class="match-stats"><div><b id="teams-left">25</b><span>ÉQUIPES</span></div><div><b id="players-left">75</b><span>JOUEURS</span></div><div><b id="phase-number">DROP</b><span>PHASE</span></div></div>
+      </div>
+      <div class="game-layout">
+        <section class="map-card">
+          <div class="map-topline"><span>CARTE TACTIQUE</span><span id="zone-label">ZONE INITIALE</span></div>
+          <div id="battle-map" class="battle-map"><div class="island"></div><div id="storm-circle" class="storm-circle"></div><div id="poi-layer"></div><div class="map-compass">N ↑</div></div>
+          <div class="map-legend"><span><i class="legend-user"></i> Ton équipe</span><span><i class="legend-poi"></i> Lieux</span><span><i class="legend-storm"></i> Tempête</span></div>
+        </section>
+        <aside class="side-panel">
+          <section class="decision-card"><div class="card-kicker">DÉCISION SUIVANTE</div><h2 id="decision-title">Où veux-tu atterrir ?</h2><p id="decision-description">Analyse le danger et le potentiel de loot de ton spot.</p><div id="action-list" class="action-list"></div></section>
+          <section class="team-card"><div class="card-kicker">TON ÉQUIPE</div><div id="team-list"></div><div class="resources"><span>🪵 <b id="wood">0</b></span><span>🧱 <b id="stone">0</b></span><span>🔩 <b id="metal">0</b></span></div></section>
+          <section class="inventory-card"><div class="card-kicker">INVENTAIRE · 5 SLOTS</div><div id="inventory-list"></div><div id="consumables-list" class="consumables-list"></div></section>
+        </aside>
+      </div>
+      <section class="bottom-grid">
+        <div class="log-card"><div class="card-kicker">JOURNAL DE PARTIE</div><div id="event-log"></div></div>
+        <div class="map-info-card"><div class="card-kicker">ZONE & POSITION</div><div id="location-info"></div><div id="rotation-picker" class="rotation-picker hidden"><label>Destination<select id="rotation-location"></select></label></div></div>
+      </section>
+      <button id="new-match" class="text-button">↻ Nouvelle partie</button>
+    </section>
+    <div id="toast" class="toast hidden"></div>
+  </main>
+  <footer>Prototype de simulation stratégique · Univers original non affilié à Epic Games</footer>
+</body>
+</html>
