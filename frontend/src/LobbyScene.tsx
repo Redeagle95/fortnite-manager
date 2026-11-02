@@ -49,8 +49,8 @@ function Island({ season }: { season: FortniteSeason }) {
 function Avatar({skin,victory}:{skin:number;victory:boolean}) {
   const root=useRef<THREE.Group>(null), body=useRef<THREE.Group>(null);
   const suit=["#e8edf5","#e8a45f","#79c8d4","#bd8de8"][skin%4];
-  useFrame(({clock})=>{const t=clock.elapsedTime;if(root.current)root.current.position.y=.5+Math.sin(t*(victory?8:1.7))*(victory?.12:.035);if(body.current){body.current.rotation.z=victory?Math.sin(t*8)*.18:Math.sin(t*1.1)*.025;body.current.rotation.y=Math.sin(t*.7)*.045;}});
-  return <group ref={root} position={[0,.5,1.2]}><group ref={body}>
+  useFrame(({clock})=>{const t=clock.elapsedTime;if(root.current)root.current.position.y=-.15+Math.sin(t*(victory?8:1.7))*(victory ? .12 : .035);if(body.current){body.current.rotation.z=victory?Math.sin(t*8)*.18:Math.sin(t*1.1)*.025;body.current.rotation.y=Math.sin(t*.7)*.045;}});
+  return <group ref={root} position={[0,-.15,1.2]} onPointerDown={(event)=>{event.stopPropagation();event.target.setPointerCapture(event.pointerId);}} onPointerMove={(event)=>{if(event.buttons===1&&root.current)root.current.rotation.y+=event.movementX*.012;}}><group ref={body}>
     <mesh position={[0,1.55,0]} castShadow><capsuleGeometry args={[.38,.82,5,12]}/><meshStandardMaterial color={suit} roughness={.62}/></mesh>
     <mesh position={[0,2.32,0]} castShadow><sphereGeometry args={[.34,20,16]}/><meshStandardMaterial color="#e8b995"/></mesh>
     <mesh position={[0,2.39,.25]}><sphereGeometry args={[.075,12,10]}/><meshStandardMaterial color="#202b3b"/></mesh>
