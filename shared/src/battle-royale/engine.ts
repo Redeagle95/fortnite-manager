@@ -322,7 +322,9 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
     const spawnLoot = collectLoot(match.userTeam, spawnDrops);
     match.lootOnGround.push(...spawnLoot.remaining);
     event(match, "LOOT", "Loot de spawn", `${spawnLoot.collected.length} objet(s) récupéré(s) avant le combat.`);
-    fight(match, random);
+    const contested = match.teams.some(team => !team.isUser && team.alive && team.dropLocationId === match.selectedDropId);
+    if (contested) fight(match, random);
+    else event(match, "INFO", "Spawn non contesté", "Aucune équipe adverse n’a atterri sur ce spot : ton équipe sécurise le loot.");
   } else if (action.type === "ROTATE") {
     const target = match.map.locations.find(l => l.id === action.locationId) ?? nearestLocation(match, random); moveTeam(match, target);
     const drops = makeDrop(match, target, random); const collected = collectLoot(match.userTeam, drops);
@@ -369,8 +371,8 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   match.storm = nextStormCircle(match.storm, next.radius, random);
   match.secondsUntilShrink = next.waitSeconds;
   match.secondsIntoShrink = 0;
-  match.phaseIndex += 1;
   applyStormDamage(match);
+  match.phaseIndex += 1;
   updateCounts(match);
   return match;
 }
