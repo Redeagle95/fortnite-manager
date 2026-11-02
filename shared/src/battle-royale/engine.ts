@@ -7,10 +7,16 @@ const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n))
 const TEAM_SIZE: Record<BattleMatch["mode"], number> = { SOLO: 1, DUO: 2, TRIO: 3, SQUAD: 4 };
 const rarityWeights: Array<[Rarity, number]> = [["COMMON", 38], ["UNCOMMON", 27], ["RARE", 18], ["EPIC", 10], ["LEGENDARY", 5], ["MYTHIC", 2]];
 
-function rarityRoll(random: SeededRandom): Rarity {
+function rarityRoll(random: SeededRandom, lootQuality = 50): Rarity {
+  const luck = clamp((lootQuality - 50) / 50, -1, 1);
+  const adjusted: Array<[Rarity, number]> = [
+    ["COMMON", 38 - 6 * luck], ["UNCOMMON", 27 - 2 * luck],
+    ["RARE", 18 + luck], ["EPIC", 10 + 3 * luck],
+    ["LEGENDARY", 5 + 2 * luck], ["MYTHIC", 2 + 2 * luck],
+  ];
   const roll = random.next() * 100;
   let cursor = 0;
-  for (const [rarity, weight] of rarityWeights) { cursor += weight; if (roll < cursor) return rarity; }
+  for (const [rarity, weight] of adjusted) { cursor += weight; if (roll < cursor) return rarity; }
   return "MYTHIC";
 }
 function createSkills(random: SeededRandom, base?: number): PlayerSkill {
@@ -68,7 +74,7 @@ function makeDrop(match: BattleMatch, location: MapLocation, random: SeededRando
     const roll = random.next();
     if (roll < 0.58) {
       const weapon = WEAPONS[random.nextInt(0, WEAPONS.length - 1)];
-      const rarity = rarityRoll(random);
+      const rarity = rarityRoll(random, location.lootQuality);
       drops.push({ id: `loot-${match.lootOnGround.length + drops.length + 1}`, kind: "WEAPON", name: weapon.name, definitionId: weapon.id, category: weapon.category, rarity, damage: Math.round(weapon.baseDamage * RARITY_MULTIPLIER[rarity]), quantity: 1 });
     } else if (roll < 0.83) {
       const item = CONSUMABLES[random.nextInt(0, CONSUMABLES.length - 1)];
