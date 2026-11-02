@@ -48,10 +48,10 @@ export interface ZonePhase {
 export interface LootDrop {
   id: string; kind: "WEAPON" | "HEAL" | "UTILITY" | "AMMO" | "MATERIAL";
   name: string; rarity: Rarity; quantity: number; definitionId?: string;
-  category?: WeaponCategory; damage?: number; material?: Material;
+  category?: WeaponCategory; damage?: number; material?: Material; locationId?: string; isSupplyDrop?: boolean;
 }
 export interface BattleEvent {
-  id: string; phase: number; type: "DROP" | "LOOT" | "FIGHT" | "ROTATE" | "REFRESH" | "FARM" | "SURGE" | "HEAL" | "STORM" | "ELIMINATION" | "INFO";
+  id: string; phase: number; type: "DROP" | "LOOT" | "FIGHT" | "ROTATE" | "REFRESH" | "FARM" | "SURGE" | "HEAL" | "STORM" | "ELIMINATION" | "INFO" | "SUPPLY_DROP";
   title: string; description: string; createdAt: number;
 }
 export interface BattleMatch {
