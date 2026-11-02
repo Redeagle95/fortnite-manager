@@ -159,6 +159,7 @@ function actionsForZone(match) {
     {type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},
     {type:"FIGHT_OUTSIDE",label:"Jouer extérieur",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}
   ];
+  if (match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && match.userTeam.players.some(p=>!p.alive&&!p.rebooted) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REBOOT",label:"Reboot un mate éliminé",description:"Faire revenir un joueur avec 100 PV grâce à un jeton de reboot.",risk:"MEDIUM"});
   if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV.",risk:"MEDIUM"});
   if (match.userTeam.inventory.items.some(item=>item.kind==="HEAL"&&item.quantity>0) && match.userTeam.players.some(p=>p.alive&&!p.knocked&&(p.health<100||p.shield<100))) actions.unshift({type:"HEAL",label:"Utiliser un soin",description:"Soigner le joueur le plus affaibli avec un consommable disponible.",risk:"LOW"});
   if (match.phaseIndex >= 3 && match.phaseIndex < 6) actions.push({type:"HOLD_POSITION",label:"Construire une position défensive",description:"Dépenser 10 matériaux pour sécuriser temporairement la position.",risk:"LOW"});
@@ -190,8 +191,10 @@ function equipmentIcon(id) {
 function renderTeam(team) {
   $("team-list").innerHTML = team.players.map(player => {
     const status = !player.alive ? "· ÉLIMINÉ" : player.knocked ? "· À TERRE" : "";
-    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
+    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) · ' + player.damageDealt + ' dégâts ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
   }).join("");
+  const rebootInfo = $("reboot-info");
+  if (rebootInfo && currentMatch) rebootInfo.textContent = "Jetons de reboot : " + team.rebootTokens + " · Un mate éliminé peut revenir avant la zone finale.";
   $("wood").textContent = team.resources.wood;
   $("stone").textContent = team.resources.stone;
   $("metal").textContent = team.resources.metal;
