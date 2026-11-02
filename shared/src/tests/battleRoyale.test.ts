@@ -228,4 +228,13 @@ describe("Battle Royale simulation", () => {
     expect(match.userTeam.inventory.items.some(item=>item.definitionId==="small-shield")).toBe(false);
   });
 
+  it("keeps the last zone restricted to height, mid, low and outside", () => {
+    const match = createBattleRoyale(9108, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.userTeam.players[1].knocked = true;
+    match.userTeam.inventory.items.push({definitionId:"small-shield",name:"Mini potion",rarity:"UNCOMMON",quantity:1,kind:"HEAL",shield:25});
+    expect(getActionOptions(match).map(option => option.type)).toEqual(["FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"]);
+  });
+
 });
