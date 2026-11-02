@@ -8,10 +8,12 @@ on:
       - feat/battle-royale-five-zone-strategy
       - feat/live-storm-surge-farming
       - feat/live-world-simulation-killfeed
+      - feat/extended-zones-team-kill-counters
   pull_request:
     branches:
       - main
       - feat/battle-royale-five-zone-strategy
+      - feat/live-storm-surge-farming
 
 jobs:
   test-and-build:
