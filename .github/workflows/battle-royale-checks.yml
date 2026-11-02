@@ -10,6 +10,7 @@ on:
       - feat/live-world-simulation-killfeed
       - feat/extended-zones-team-kill-counters
       - feat/deep-competitive-gameplay
+      - feat/meaningful-team-roles
   pull_request:
     branches:
       - main
