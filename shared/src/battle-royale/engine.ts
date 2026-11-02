@@ -342,14 +342,29 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
   const mapWidth = match.map.width;
   const mapHeight = match.map.height;
 
-  // Enemy teams progressively rotate toward the active storm instead of staying on their drop POI.
+  // Enemy squads choose a sensible destination inside the next circle.
+  // In later zones, locations tagged as high ground receive a strong positioning bonus.
   for (const team of enemies) {
-    const dx = match.storm.x - team.position.x;
-    const dy = match.storm.y - team.position.y;
+    const safeLocations = match.map.locations.filter(location =>
+      isInsideStorm(location.x, location.y, match.stormTarget)
+    );
+    const candidates = safeLocations.length ? safeLocations : match.map.locations;
+    const destination = candidates.map(location => {
+      const distance = Math.hypot(location.x - team.position.x, location.y - team.position.y);
+      const highGround = location.tags.some(tag => ["hauteur", "position", "hill", "high-ground"].includes(tag));
+      const highGroundBonus = match.phaseIndex >= 4 && highGround ? 1500 : 0;
+      const lootBonus = location.lootQuality * 3;
+      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? 5 : 8);
+      return { location, score: distance * 0.65 + dangerPenalty - lootBonus - highGroundBonus };
+    }).sort((a, b) => a.score - b.score)[0]?.location;
+    const targetX = destination?.x ?? match.stormTarget.x;
+    const targetY = destination?.y ?? match.stormTarget.y;
+    const dx = targetX - team.position.x;
+    const dy = targetY - team.position.y;
     const distance = Math.hypot(dx, dy) || 1;
     const step = random.nextInt(180, 520);
-    const driftX = random.nextInt(-170, 170);
-    const driftY = random.nextInt(-170, 170);
+    const driftX = random.nextInt(-110, 110);
+    const driftY = random.nextInt(-110, 110);
     team.position = {
       x: Math.max(120, Math.min(mapWidth - 120, team.position.x + dx / distance * step + driftX)),
       y: Math.max(120, Math.min(mapHeight - 120, team.position.y + dy / distance * step + driftY)),
@@ -366,9 +381,19 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       .filter(entry => entry.distance < 1050)
       .sort((a, b) => a.distance - b.distance);
     const encounter = opponents[0];
-    if (!encounter || random.next() > encounterChance) continue;
-
+    if (!encounter) continue;
     const rival = encounter.other;
+    const averageHealth = alivePlayers(team).reduce((sum, player) => sum + player.health + player.shield, 0) / Math.max(1, alivePlayers(team).length) / 200;
+    const powerDifference = teamPower(team) - teamPower(rival);
+    let willingnessToFight = encounterChance;
+    // Squads with low health or a clear power disadvantage prefer to disengage.
+    if (averageHealth < 0.4) willingnessToFight *= 0.3;
+    else if (averageHealth < 0.65) willingnessToFight *= 0.6;
+    if (powerDifference < -15) willingnessToFight *= 0.45;
+    else if (powerDifference > 15) willingnessToFight *= 1.15;
+    if (match.phaseIndex >= 4) willingnessToFight *= 1.1;
+    if (random.next() > Math.min(0.9, willingnessToFight)) continue;
+
     engaged.add(team.id);
     engaged.add(rival.id);
     const winner = random.next() * 100 < clamp(50 + (teamPower(team) - teamPower(rival)) * 0.65, 12, 88) ? team : rival;
