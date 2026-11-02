@@ -56,7 +56,8 @@ function rotationRiskMultiplier(team: BattleTeam): number {
   const scout = activeRolePlayer(team, "SCOUT");
   const leadership = igl ? 0.10 + igl.skills.decisionMaking * 0.002 : 0;
   const awareness = scout ? 0.08 + scout.skills.gameSense * 0.0015 : 0;
-  return clamp(1 - leadership - awareness, 0.45, 1);
+  const strategyFactor = team.strategy === "PRUDENT" ? 0.82 : team.strategy === "STRATEGIC" ? 0.92 : team.strategy === "AGGRESSIVE" ? 1.12 : 1;
+  return clamp((1 - leadership - awareness) * strategyFactor, 0.4, 1.2);
 }
 function aliveTeams(match: BattleMatch): BattleTeam[] { return match.teams.filter(t => t.alive); }
 function isFinished(match: BattleMatch): boolean { return match.stage === "FINISHED"; }
@@ -172,7 +173,12 @@ export function getFightProbability(match: BattleMatch, style?: "HEIGHT" | "MID"
   const tacticalRead = igl ? 1 + igl.skills.decisionMaking * 0.045 : 0;
   const fragger = activeRolePlayer(match.userTeam, "FRAGGER");
   const entryPressure = fragger ? 1 + fragger.skills.aim * 0.055 : 0;
-  return Math.round(clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage + tacticalRead + entryPressure, 5, 95));
+  const targetHealth = activePlayers(enemy).reduce((sum, player) => sum + player.health + player.shield, 0) / Math.max(1, activePlayers(enemy).length * 2);
+  const strategyBonus = match.userTeam.strategy === "AGGRESSIVE" ? 4
+    : match.userTeam.strategy === "PRUDENT" ? -2
+    : match.userTeam.strategy === "OPPORTUNISTIC" ? (targetHealth < 65 ? 7 : -1)
+    : 2;
+  return Math.round(clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage + tacticalRead + entryPressure + strategyBonus, 5, 95));
 }
 function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE", combatMode?: "FOCUS" | "BOXFIGHT", targetPlayerId?: string): FightReport {
   const enemy = findEnemy(match, match.stage === "DROP" ? match.selectedDropId : match.currentLocationId);
@@ -201,7 +207,7 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
     event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
   }
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
-  const fraggerMultiplier = fragger ? 1.05 + fragger.skills.aim * 0.001 : 1;
+  const fraggerMultiplier = (fragger ? 1.05 + fragger.skills.aim * 0.001 : 1) * (match.userTeam.strategy === "AGGRESSIVE" ? 1.08 : match.userTeam.strategy === "OPPORTUNISTIC" && activePlayers(enemy).some(player => player.health + player.shield < 65) ? 1.1 : 1);
   const damage = Math.round((enemyEliminations * 100 + (won ? 80 : 35)) * fraggerMultiplier);
   match.userTeam.damageDealt += damage;
   if (userKiller) userKiller.damageDealt += damage;
