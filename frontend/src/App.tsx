@@ -49,7 +49,9 @@ function App() {
   const chooseNav = (label: string) => {
     setActiveNav(label);
     setMobileMenu(false);
-    setPanelMessage(label === "Jouer" ? "" : label + " — espace de jeu en cours de construction");
+    if (label === "Boutique") { setWardrobeTab("shop"); setPanelMessage(""); }
+    else if (label === "Casier") { setWardrobeTab("locker"); setPanelMessage(""); }
+    else { setWardrobeTab(null); setPanelMessage(label === "Jouer" ? "" : label + " — espace de jeu en cours de construction"); }
   };
 
   const buyOutfit = (item: Outfit) => { if (owned.includes(item.id)) { setSkinId(item.id); setNotice(item.name+" équipé !"); return; } if(vbucks<item.price){setNotice("Crédits insuffisants.");return;} setVbucks(v=>v-item.price);setOwned(v=>[...v,item.id]);setSkinId(item.id);setNotice(item.name+" ajouté au casier !"); };
