@@ -8,7 +8,6 @@ on:
       - feat/battle-royale-five-zone-strategy
       - feat/live-storm-surge-farming
       - feat/live-world-simulation-killfeed
-      - feat/live-storm-surge-farming
   pull_request:
     branches:
       - main
