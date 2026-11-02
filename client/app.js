@@ -96,8 +96,10 @@ function estimateTeamPower(team, style) {
 function fightPreview(match, style) {
   const enemies = match.teams.filter(t => !t.isUser && t.alive && (match.stage !== "DROP" || t.dropLocationId === match.selectedDropId));
   if (!enemies.length) return { chance: 100, enemy: "Aucun adversaire sur ce spot" };
-  enemies.sort((a,b) => Math.hypot(a.position.x-match.userTeam.position.x,a.position.y-match.userTeam.position.y)-Math.hypot(b.position.x-match.userTeam.position.x,b.position.y-match.userTeam.position.y));
-  const enemy = enemies[0];
+  const sameSpot = enemies.filter(t => t.dropLocationId === match.currentLocationId);
+  const pool = sameSpot.length ? sameSpot : enemies;
+  pool.sort((a,b) => Math.hypot(a.position.x-match.userTeam.position.x,a.position.y-match.userTeam.position.y)-Math.hypot(b.position.x-match.userTeam.position.x,b.position.y-match.userTeam.position.y));
+  const enemy = pool[0];
   const positioning = style === "HEIGHT" ? 7 : style === "MID" ? 3 : style === "LOW" ? 1 : style === "OUTSIDE" ? -2 : 0;
   const builds = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
   const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam, style) - estimateTeamPower(enemy)) * .72 + positioning + builds));
