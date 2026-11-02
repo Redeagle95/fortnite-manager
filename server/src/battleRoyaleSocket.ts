@@ -8,7 +8,7 @@ import type { BattleAction, BattleMatch, BattleMode } from "../../shared/src/bat
 
 const matches = new Map<string, BattleMatch>();
 const modes: BattleMode[] = ["SOLO", "DUO", "TRIO", "SQUAD"];
-const actions = ["FIGHT", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE"] as const;
+const actions = ["FIGHT", "FIGHT_THEN_ROTATE", "FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
