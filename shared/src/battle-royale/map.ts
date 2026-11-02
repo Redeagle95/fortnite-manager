@@ -20,9 +20,11 @@ export const BATTLE_ROYALE_MAP = {
 };
 export const ZONE_PHASES: ZonePhase[] = [
   { phase: 1, radius: 4200, waitSeconds: 150, shrinkSeconds: 60, damagePerSecond: 1 },
-  { phase: 2, radius: 3000, waitSeconds: 120, shrinkSeconds: 55, damagePerSecond: 1 },
-  { phase: 3, radius: 1900, waitSeconds: 100, shrinkSeconds: 50, damagePerSecond: 2 },
-  { phase: 4, radius: 950, waitSeconds: 85, shrinkSeconds: 45, damagePerSecond: 5 },
+  { phase: 2, radius: 3200, waitSeconds: 120, shrinkSeconds: 55, damagePerSecond: 1 },
+  { phase: 3, radius: 2350, waitSeconds: 105, shrinkSeconds: 50, damagePerSecond: 2 },
+  { phase: 4, radius: 1600, waitSeconds: 90, shrinkSeconds: 45, damagePerSecond: 3 },
+  { phase: 5, radius: 850, waitSeconds: 75, shrinkSeconds: 40, damagePerSecond: 5 },
+  { phase: 6, radius: 320, waitSeconds: 55, shrinkSeconds: 35, damagePerSecond: 8 },
 ];
 export function isInsideStorm(x: number, y: number, circle: StormCircle): boolean {
   return Math.hypot(x - circle.x, y - circle.y) <= circle.radius;
