@@ -22,6 +22,7 @@
         <label>Mode de jeu<select id="mode"><option value="SOLO">Solo</option><option value="DUO">Duo</option><option value="TRIO" selected>Trio</option><option value="SQUAD">Squad</option></select></label>
         <label>Point d'atterrissage<select id="drop-location"></select></label>
         <label>Seed de partie<input id="seed" type="number" value="20261102"></label>
+        <label>Stratégie de ton IGL<select id="team-strategy"><option value="PRUDENT">Prudent · priorité à la survie</option><option value="AGGRESSIVE">Agressif · recherche de fights</option><option value="STRATEGIC" selected>Stratégique · rotations équilibrées</option><option value="OPPORTUNISTIC">Opportuniste · punir les équipes faibles</option></select></label>
       </div>
       <div class="setup-map-wrap"><div class="map-topline"><span>CHOISIS TON POINT DE DROP</span><span>CARTE DE L'ÎLE</span></div><div id="setup-map" class="setup-map"><div class="setup-island"></div><div id="setup-poi-layer"></div></div><p class="map-hint">Clique directement sur un lieu pour sélectionner ton spawn.</p></div>
       <div class="ratings-head"><div><b>Évaluation de l'équipe</b><span>Note générale de chaque joueur · 0 à 100</span></div><div id="ratings-fields" class="ratings-fields"></div></div>
@@ -31,7 +32,7 @@
     <section id="game-panel" class="game-panel hidden">
       <div class="game-heading">
         <div><div class="eyebrow">BATTLE ROYALE · ISLAND ROYALE</div><h1 id="phase-title">À toi de jouer</h1><p id="phase-subtitle">Choisis ta prochaine décision.</p></div>
-        <div class="match-stats"><div><b id="teams-left">25</b><span>ÉQUIPES</span></div><div><b id="players-left">100</b><span>JOUEURS EN VIE</span></div><div><b id="kills-left">0</b><span>KILLS ÉQUIPE</span></div><div><b id="phase-number">1/7</b><span>PHASE</span></div></div>
+        <div class="match-stats"><div><b id="teams-left">25</b><span>ÉQUIPES</span></div><div><b id="players-left">100</b><span>JOUEURS EN VIE</span></div><div><b id="kills-left">0</b><span>KILLS ÉQUIPE</span></div><div><b id="phase-number">1/7</b><span>PHASE</span></div><div><b id="points-left">0</b><span>POINTS</span></div></div>
       </div>
       <div class="game-layout">
         <section class="map-card">
@@ -42,7 +43,7 @@
         <aside class="side-panel">
           <section class="decision-card"><div class="card-kicker">DÉCISION SUIVANTE</div><h2 id="decision-title">Où veux-tu atterrir ?</h2><p id="decision-description">Analyse le danger et le potentiel de loot de ton spot.</p><div id="action-list" class="action-list"></div></section>
           <section class="team-card"><div class="card-kicker">TON ÉQUIPE</div><div id="team-list"></div><div class="materials-panel"><div class="materials-title">MATÉRIAUX <small>MAX. 500 PAR TYPE</small></div><div class="material-row"><span>🪵 Bois</span><div class="material-track"><i id="wood-bar"></i></div><b><span id="wood">0</span>/500</b></div><div class="material-row"><span>🧱 Pierre</span><div class="material-track"><i id="stone-bar"></i></div><b><span id="stone">0</span>/500</b></div><div class="material-row"><span>🔩 Métal</span><div class="material-track"><i id="metal-bar"></i></div><b><span id="metal">0</span>/500</b></div></div></section>
-          <section class="inventory-card"><div class="card-kicker">INVENTAIRE · 5 SLOTS</div><div id="inventory-list"></div><div id="consumables-list" class="consumables-list"></div></section>
+          <section class="inventory-card"><div class="card-kicker">INVENTAIRE · 5 SLOTS</div><div id="inventory-list"></div><div id="consumables-list" class="consumables-list"></div><div class="ground-loot"><div class="materials-title">LOOT AU SOL</div><div id="ground-loot"></div></div></section>
         </aside>
       </div>
       <section class="bottom-grid">
