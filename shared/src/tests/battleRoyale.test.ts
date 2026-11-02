@@ -36,7 +36,7 @@ describe("Battle Royale simulation", () => {
   });
 
   it("allows an active teammate to revive a knocked teammate", () => {
-    const match = createBattleRoyale(321, "TRIO", "pine-woods");
+    const match = createBattleRoyale(321, "TRIO", "lake-outpost");
     resolveDrop(match, { type: "LOOT" });
     const target = match.userTeam.players[1];
     target.knocked = true;
