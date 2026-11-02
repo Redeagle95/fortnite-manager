@@ -1,6 +1,6 @@
-# Fortnite Manager — frontend
+# Dropzone — lobby 3D saisonnier
 
-Frontend React isolé du serveur et du moteur partagé.
+Frontend React + TypeScript + Vite avec scène 3D temps réel (Three.js / React Three Fiber).
 
 ## Démarrage
 
@@ -12,15 +12,20 @@ npm run dev
 
 Vite démarre sur http://localhost:5173.
 
-## Architecture saisonnière
+## Lobby 3D
 
-- `src/seasons/seasonRegistry.ts` : catalogue des thèmes saisonniers.
-- `src/seasons/seasonResolver.ts` : sélection automatique du thème selon la date de carrière.
-- `src/App.tsx` : premier tableau de bord React.
-- `src/styles.css` : interface responsive et variables visuelles saisonnières.
+- `src/LobbyScene.tsx` : île procédurale 3D, avatar original stylisé, éclairage, nuages, particules et caméra orbitale.
+- `src/App.tsx` : interface de lobby, navigation, profil de démonstration, modes de jeu, sélection de tenue, emote et réglages graphiques.
+- `src/styles.css` : interface plein écran et responsive.
+- `src/seasons/seasonRegistry.ts` : huit directions artistiques annuelles 2019–2026.
+- `src/seasons/seasonResolver.ts` : choix de l'ère selon la date de carrière.
 
-Le catalogue fourni est un jeu de données de démonstration limité à quelques saisons historiques. Il ne prétend pas encore couvrir toutes les saisons 2019–2026. Les dates et métadonnées devront être complétées et vérifiées avant de brancher le calendrier au moteur de carrière.
+## Saisons et propriété intellectuelle
 
-Les illustrations actuelles sont générées en CSS afin de ne pas intégrer de visuels Fortnite non validés. Les emplacements pourront recevoir les illustrations officielles/licenciées ou des créations originales adaptées à chaque saison.
+Les huit environnements sont des interprétations originales d'ambiances générales par période. Ils ne contiennent pas de modèles, personnages, cartes ou textures propriétaires de Fortnite. Le calendrier présenté est un sélecteur d'ères visuelles annuelles, pas une base exhaustive des dates officielles de chaque saison.
 
-Ce frontend n'altère pas les dossiers `server/` et `shared/` ni le `package.json` racine.
+## Limites du prototype
+
+Le personnage est un modèle procédural temporaire et stylisé, pas un skin Fortnite. Les statistiques, V-Bucks et le statut « prêt » sont des données locales de démonstration : aucun matchmaking, compte joueur, monnaie réelle ou boutique transactionnelle n'est connecté. Les options graphiques adaptent le nombre de particules, les ombres et le ratio de rendu.
+
+Le frontend reste isolé du serveur et du moteur partagé du dépôt.
