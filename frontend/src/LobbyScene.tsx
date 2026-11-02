@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import { useLoader } from "@react-three/fiber";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
@@ -51,7 +52,7 @@ function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
   const root=useRef<THREE.Group>(null), body=useRef<THREE.Group>(null);
   const [suit, secondary, detail] = skin.colors;
   useFrame(({clock})=>{const t=clock.elapsedTime;if(root.current)root.current.position.y=-.15+Math.sin(t*(victory?8:1.7))*(victory ? .12 : .035);if(body.current){body.current.rotation.z=victory?Math.sin(t*8)*.18:Math.sin(t*1.1)*.025;body.current.rotation.y=Math.sin(t*.7)*.045;}});
-  return <group ref={root} position={[0,-.15,1.2]} onPointerDown={(event)=>{event.stopPropagation();event.target.setPointerCapture(event.pointerId);}} onPointerMove={(event)=>{if(event.buttons===1&&root.current)root.current.rotation.y+=event.movementX*.012;}}><group ref={body}>
+  return <group ref={root} position={[0,-.15,1.2]} onPointerDown={(event)=>{event.stopPropagation();}} onPointerMove={(event)=>{if(event.buttons===1&&root.current)root.current.rotation.y+=event.movementX*.012;}}><group ref={body}>
     <mesh position={[0,1.55,0]} castShadow><capsuleGeometry args={[.4,.9,8,16]}/><meshStandardMaterial color={suit} roughness={.55}/></mesh>
     <mesh position={[0,1.58,.34]} castShadow><boxGeometry args={[.48,.48,.1]}/><meshStandardMaterial color={secondary} metalness={.25} roughness={.4}/></mesh>
     <mesh position={[0,1.58,.4]}><boxGeometry args={[.2,.07,.025]}/><meshBasicMaterial color={skin.accent}/></mesh>
@@ -68,8 +69,19 @@ function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
 
 function Scene({season,skin,victory,quality}:Props) {
   const particles=quality==="low"?20:quality==="medium"?45:85;
+  const atlas = useLoader(THREE.TextureLoader, "/lobbies/season-lobby-atlas.webp");
+  const backgroundTexture = useMemo(() => {
+    const texture = atlas.clone();
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.repeat.set(0.5, 0.25);
+    const column = season.backgroundCell % 2;
+    const row = Math.floor(season.backgroundCell / 2);
+    texture.offset.set(column * 0.5, 1 - (row + 1) * 0.25);
+    texture.needsUpdate = true;
+    return texture;
+  }, [atlas, season.backgroundCell]);
   return <>
-    <color attach="background" args={[season.sky]}/><fog attach="fog" args={[season.horizon,12,34]}/>
+    <primitive attach="background" object={backgroundTexture}/>
     <ambientLight intensity={quality==="low"?1.1:.75}/>
     <directionalLight position={[-5,9,6]} intensity={2.1} color="#fff0d8" castShadow shadow-mapSize={[quality==="high"?2048:1024,quality==="high"?2048:1024]}/>
     <pointLight position={[5,3,-4]} intensity={1.5} color={season.accent} distance={18}/>
