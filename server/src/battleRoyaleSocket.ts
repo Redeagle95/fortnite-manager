@@ -24,7 +24,8 @@ export function registerBattleRoyaleSocket(io: Server): void {
         const dropLocationId = String(payload.dropLocationId ?? "");
         if (!Number.isInteger(seed)) throw new Error("La seed doit être un entier.");
         if (!modes.includes(mode as BattleMode)) throw new Error("Mode de jeu invalide.");
-        const match = createBattleRoyale(seed, mode as BattleMode, dropLocationId);
+        const ratings = Array.isArray(payload.playerRatings) ? payload.playerRatings.map(Number) : undefined;
+        const match = createBattleRoyale(seed, mode as BattleMode, dropLocationId, ["Ton équipe"], ratings);
         match.id = `${match.id}-${socket.id.slice(0, 6)}`;
         matches.set(match.id, match);
         socket.join(match.id);
@@ -41,7 +42,8 @@ export function registerBattleRoyaleSocket(io: Server): void {
         if (!match) throw new Error("Partie introuvable.");
         const type = payload.action;
         if (type !== "FIGHT" && type !== "LOOT" && type !== "ROTATE") throw new Error("Choix de spawn invalide.");
-        resolveDrop(match, { type });
+        const locationId = typeof payload.locationId === "string" ? payload.locationId : undefined;
+        resolveDrop(match, type === "ROTATE" ? { type, locationId } : { type });
         io.to(match.id).emit("battle:state", match);
       } catch (error) {
         socket.emit("battle:error", { message: error instanceof Error ? error.message : "Action impossible." });
