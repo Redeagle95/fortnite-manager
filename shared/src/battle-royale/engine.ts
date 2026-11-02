@@ -233,10 +233,26 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       }
       break;
     }
-    case "FIGHT_HEIGHT": fight(match, random, "HEIGHT"); break;
-    case "FIGHT_MID": fight(match, random, "MID"); break;
-    case "FIGHT_LOW": fight(match, random, "LOW"); break;
-    case "FIGHT_OUTSIDE": fight(match, random, "OUTSIDE"); break;
+    case "FIGHT_HEIGHT": {
+      const report = fight(match, random, "HEIGHT");
+      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      break;
+    }
+    case "FIGHT_MID": {
+      const report = fight(match, random, "MID");
+      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      break;
+    }
+    case "FIGHT_LOW": {
+      const report = fight(match, random, "LOW");
+      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      break;
+    }
+    case "FIGHT_OUTSIDE": {
+      const report = fight(match, random, "OUTSIDE");
+      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      break;
+    }
     case "LOOT": {
       const drops = makeDrop(match, location, random);
       const result = collectLoot(match.userTeam, drops);
@@ -377,7 +393,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   return match;
 }
 export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> {
-  const options = match.stage === "DROP" ? [
+  const options: Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> = match.stage === "DROP" ? [
     { type: "FIGHT" as const, label: "Atterrir ici malgré la contestation", description: "Prendre le fight au spawn si une équipe adverse est présente.", risk: "HIGH" as const },
     { type: "LOOT" as const, label: "Atterrir ici et loot librement", description: "Sécuriser le spot et récupérer le premier équipement.", risk: "MEDIUM" as const },
     { type: "ROTATE" as const, label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" as const },
