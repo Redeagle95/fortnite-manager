@@ -69,12 +69,25 @@ function renderMap(match) {
     const isUser = location.id === match.currentLocationId;
     return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}</button>`;
   }).join("");
-  const teamMarkers = match.teams.filter(team => team.alive).map(team => {
+  $("poi-layer").innerHTML = poiButtons;
+  const markerLayer = $("team-marker-layer");
+  const existingMarkers = new Map([...markerLayer.querySelectorAll("[data-team-marker]")].map(marker => [marker.dataset.teamMarker, marker]));
+  for (const team of match.teams.filter(candidate => candidate.alive)) {
     const alive = team.players.filter(player => player.alive).length;
-    const label = team.isUser ? "V" : String(alive);
-    return `<span class="team-marker ${team.isUser ? "user" : "opponent"}" style="left:${team.position.x / width * 100}%;top:${team.position.y / height * 100}%" title="${escapeHtml(team.name)} · ${alive} joueur(s) vivant(s)">${label}</span>`;
-  }).join("");
-  $("poi-layer").innerHTML = poiButtons + teamMarkers;
+    let marker = existingMarkers.get(team.id);
+    if (!marker) {
+      marker = document.createElement("span");
+      marker.dataset.teamMarker = team.id;
+      markerLayer.appendChild(marker);
+    }
+    marker.className = "team-marker " + (team.isUser ? "user" : "opponent");
+    marker.style.left = (team.position.x / width * 100) + "%";
+    marker.style.top = (team.position.y / height * 100) + "%";
+    marker.textContent = team.isUser ? "V" : String(alive);
+    marker.title = team.name + " · " + alive + " joueur(s) vivant(s)";
+    existingMarkers.delete(team.id);
+  }
+  for (const marker of existingMarkers.values()) marker.remove();
   document.querySelectorAll("[data-poi]").forEach(button => button.addEventListener("click", () => {
     if (match.stage === "DROP") {
       $("drop-location").value = button.dataset.poi;
