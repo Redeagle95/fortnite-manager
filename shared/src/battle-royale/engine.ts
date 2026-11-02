@@ -411,22 +411,22 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
     case "FIGHT_HEIGHT": {
       const report = fight(match, random, "HEIGHT");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_MID": {
       const report = fight(match, random, "MID");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_LOW": {
       const report = fight(match, random, "LOW");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_OUTSIDE": {
       const report = fight(match, random, "OUTSIDE");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "LOOT": {
@@ -563,7 +563,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!isFinished(match)) simulateWorldTick(match, random);
   if (isFinished(match)) return match;
   match.stage = "ZONE";
-  if (match.phaseIndex >= 4) {
+  if (match.phaseIndex >= 6) {
     const lastEnemy = match.teams.find(team => !team.isUser && team.alive);
     if (lastEnemy && match.userTeam.alive && !["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "FIGHT"].includes(action.type)) {
       const report = fight(match, random);
@@ -607,6 +607,11 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
     { type: "ROTATE" as const, label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête et rejoindre le prochain cercle.", risk: "MEDIUM" as const },
     { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources sans dépasser 500 par matériau.", risk: "LOW" as const },
     { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre des tags pour éviter les dégâts de storm surge si le seuil n'est pas atteint.", risk: "MEDIUM" as const },
+  ] : match.phaseIndex === 4 || match.phaseIndex === 5 ? [
+    { type: "FIGHT" as const, label: "Prendre un fight contrôlé", description: "Évaluer les adversaires proches et tenter une élimination avant le dernier cercle.", risk: "HIGH" as const },
+    { type: "ROTATE" as const, label: "Prendre une bonne position", description: "Rejoindre le prochain cercle et sécuriser une position jouable.", risk: "MEDIUM" as const },
+    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" as const },
+    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre les derniers tags nécessaires pour atteindre le seuil.", risk: "MEDIUM" as const },
   ] : [
     { type: "FIGHT_HEIGHT" as const, label: "Prendre la hauteur", description: "Meilleure synergie avec fusils d'assaut et snipers.", risk: "HIGH" as const },
     { type: "FIGHT_MID" as const, label: "Jouer au milieu", description: "Meilleure synergie avec les pompes et les armes polyvalentes.", risk: "HIGH" as const },
