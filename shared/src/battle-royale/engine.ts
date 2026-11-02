@@ -342,14 +342,29 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
   const mapWidth = match.map.width;
   const mapHeight = match.map.height;
 
-  // Enemy teams progressively rotate toward the active storm instead of staying on their drop POI.
+  // Enemy squads choose a sensible destination inside the next circle.
+  // In later zones, locations tagged as high ground receive a strong positioning bonus.
   for (const team of enemies) {
-    const dx = match.storm.x - team.position.x;
-    const dy = match.storm.y - team.position.y;
+    const safeLocations = match.map.locations.filter(location =>
+      isInsideStorm(location.x, location.y, match.stormTarget)
+    );
+    const candidates = safeLocations.length ? safeLocations : match.map.locations;
+    const destination = candidates.map(location => {
+      const distance = Math.hypot(location.x - team.position.x, location.y - team.position.y);
+      const highGround = location.tags.some(tag => ["hauteur", "position", "hill", "high-ground"].includes(tag));
+      const highGroundBonus = match.phaseIndex >= 4 && highGround ? 1500 : 0;
+      const lootBonus = location.lootQuality * 3;
+      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? 5 : 8);
+      return { location, score: distance * 0.65 + dangerPenalty - lootBonus - highGroundBonus };
+    }).sort((a, b) => a.score - b.score)[0]?.location;
+    const targetX = destination?.x ?? match.stormTarget.x;
+    const targetY = destination?.y ?? match.stormTarget.y;
+    const dx = targetX - team.position.x;
+    const dy = targetY - team.position.y;
     const distance = Math.hypot(dx, dy) || 1;
     const step = random.nextInt(180, 520);
-    const driftX = random.nextInt(-170, 170);
-    const driftY = random.nextInt(-170, 170);
+    const driftX = random.nextInt(-110, 110);
+    const driftY = random.nextInt(-110, 110);
     team.position = {
       x: Math.max(120, Math.min(mapWidth - 120, team.position.x + dx / distance * step + driftX)),
       y: Math.max(120, Math.min(mapHeight - 120, team.position.y + dy / distance * step + driftY)),
@@ -366,9 +381,19 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       .filter(entry => entry.distance < 1050)
       .sort((a, b) => a.distance - b.distance);
     const encounter = opponents[0];
-    if (!encounter || random.next() > encounterChance) continue;
-
+    if (!encounter) continue;
     const rival = encounter.other;
+    const averageHealth = alivePlayers(team).reduce((sum, player) => sum + player.health + player.shield, 0) / Math.max(1, alivePlayers(team).length) / 200;
+    const powerDifference = teamPower(team) - teamPower(rival);
+    let willingnessToFight = encounterChance;
+    // Squads with low health or a clear power disadvantage prefer to disengage.
+    if (averageHealth < 0.4) willingnessToFight *= 0.3;
+    else if (averageHealth < 0.65) willingnessToFight *= 0.6;
+    if (powerDifference < -15) willingnessToFight *= 0.45;
+    else if (powerDifference > 15) willingnessToFight *= 1.15;
+    if (match.phaseIndex >= 4) willingnessToFight *= 1.1;
+    if (random.next() > Math.min(0.9, willingnessToFight)) continue;
+
     engaged.add(team.id);
     engaged.add(rival.id);
     const winner = random.next() * 100 < clamp(50 + (teamPower(team) - teamPower(rival)) * 0.65, 12, 88) ? team : rival;
@@ -411,22 +436,22 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
     case "FIGHT_HEIGHT": {
       const report = fight(match, random, "HEIGHT");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_MID": {
       const report = fight(match, random, "MID");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_LOW": {
       const report = fight(match, random, "LOW");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "FIGHT_OUTSIDE": {
       const report = fight(match, random, "OUTSIDE");
-      if (match.phaseIndex >= 4 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
       break;
     }
     case "LOOT": {
@@ -563,7 +588,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!isFinished(match)) simulateWorldTick(match, random);
   if (isFinished(match)) return match;
   match.stage = "ZONE";
-  if (match.phaseIndex >= 4) {
+  if (match.phaseIndex >= 6) {
     const lastEnemy = match.teams.find(team => !team.isUser && team.alive);
     if (lastEnemy && match.userTeam.alive && !["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "FIGHT"].includes(action.type)) {
       const report = fight(match, random);
@@ -607,6 +632,11 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
     { type: "ROTATE" as const, label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête et rejoindre le prochain cercle.", risk: "MEDIUM" as const },
     { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources sans dépasser 500 par matériau.", risk: "LOW" as const },
     { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre des tags pour éviter les dégâts de storm surge si le seuil n'est pas atteint.", risk: "MEDIUM" as const },
+  ] : match.phaseIndex === 4 || match.phaseIndex === 5 ? [
+    { type: "FIGHT" as const, label: "Prendre un fight contrôlé", description: "Évaluer les adversaires proches et tenter une élimination avant le dernier cercle.", risk: "HIGH" as const },
+    { type: "ROTATE" as const, label: "Prendre une bonne position", description: "Rejoindre le prochain cercle et sécuriser une position jouable.", risk: "MEDIUM" as const },
+    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" as const },
+    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre les derniers tags nécessaires pour atteindre le seuil.", risk: "MEDIUM" as const },
   ] : [
     { type: "FIGHT_HEIGHT" as const, label: "Prendre la hauteur", description: "Meilleure synergie avec fusils d'assaut et snipers.", risk: "HIGH" as const },
     { type: "FIGHT_MID" as const, label: "Jouer au milieu", description: "Meilleure synergie avec les pompes et les armes polyvalentes.", risk: "HIGH" as const },

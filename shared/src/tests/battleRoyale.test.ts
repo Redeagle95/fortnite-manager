@@ -118,7 +118,7 @@ describe("Battle Royale simulation", () => {
     expect(match.storm.radius).toBe(4200);
     expect(match.phaseIndex).toBe(1);
     expect(getActionOptions(match).map(a => a.type)).toContain("FARM_FULL");
-    match.phaseIndex = 4;
+    match.phaseIndex = 6;
     expect(getActionOptions(match).map(a => a.type)).toEqual(expect.arrayContaining(["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE"]));
   });
   it("caps each material at 500", () => {
@@ -134,6 +134,19 @@ describe("Battle Royale simulation", () => {
     resolveDrop(match, { type: "LOOT" });
     match.userTeam.inventory.weapons = [{ id: "test-ar", definitionId: "assault-rifle", name: "Test AR", category: "ASSAULT_RIFLE", rarity: "LEGENDARY", damage: 45, magazine: 30, ammo: 30 }];
     expect(getFightProbability(match, "HEIGHT")).toBeGreaterThanOrEqual(getFightProbability(match, "LOW"));
+  });
+
+  it("uses six storm phases and reserves zone seven for the four final tactics", () => {
+    const match = createBattleRoyale(891, "TRIO", "pine-woods");
+    expect(match.phases).toHaveLength(6);
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 5;
+    expect(getActionOptions(match).map(action => action.type)).toContain("ROTATE");
+    match.phaseIndex = 6;
+    expect(getActionOptions(match).map(action => action.type)).toEqual(
+      expect.arrayContaining(["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE"])
+    );
+    expect(getActionOptions(match).map(action => action.type)).not.toContain("FARM_FULL");
   });
 
 });
