@@ -56,3 +56,13 @@ The strategic match is split into five decisions:
 The storm map shows the current safe circle and a dashed preview of the next contraction. The circle visibly shrinks as each decision is completed. Bot squads receive randomized weapons and materials so their combat strength is not based on ratings alone.
 
 Knockdowns and revives remain active throughout the match: a downed teammate can be revived to 30 health while at least one teammate remains active; if the whole squad is down, the team is eliminated.
+
+
+## Advanced competitive gameplay
+
+- Choose an IGL strategy before starting: prudent, aggressive, strategic or opportunistic. Bot squads receive their own strategy, influencing their rotations and willingness to fight.
+- Squad roles (IGL, fragger, support and scout) and individual elimination/damage statistics are tracked.
+- Focus-fire and boxfight choices add team-coordination and close-range combat modifiers. Disengage moves the squad toward a safer location.
+- Healing can be used when teammates need health or shield. Ground loot remains available for later pickup; when weapon slots are full, choose which weapon to replace.
+- After the sixth contraction, the final safe zone moves continuously. Zone 7 remains active until only one squad is left.
+- Match results award placement points plus two points per team elimination.
