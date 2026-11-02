@@ -209,7 +209,7 @@ describe("Battle Royale simulation", () => {
       }
     }
     match.stage = "ZONE";
-    advanceMatchTime(match, 15);
+    advanceMatchTime(match, 1);
     expect(match.stage).toBe("ZONE");
     expect(match.result).toBe(null);
     expect(match.userTeam.placement).toBe(3);
