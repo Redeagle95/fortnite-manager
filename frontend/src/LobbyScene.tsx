@@ -3,8 +3,9 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import type { FortniteSeason } from "./seasons/seasonRegistry";
+import type { Outfit } from "./outfits";
 
-type Props = { season: FortniteSeason; skin: number; victory: boolean; quality: "low" | "medium" | "high" };
+type Props = { season: FortniteSeason; skin: Outfit; victory: boolean; quality: "low" | "medium" | "high" };
 
 function Cloud({ position, speed = .1 }: { position: [number, number, number]; speed?: number }) {
   const ref = useRef<THREE.Group>(null);
@@ -46,19 +47,22 @@ function Island({ season }: { season: FortniteSeason }) {
   </group>;
 }
 
-function Avatar({skin,victory}:{skin:number;victory:boolean}) {
+function Avatar({skin,victory}:{skin:Outfit;victory:boolean}) {
   const root=useRef<THREE.Group>(null), body=useRef<THREE.Group>(null);
-  const suit=["#e8edf5","#e8a45f","#79c8d4","#bd8de8"][skin%4];
+  const [suit, secondary, detail] = skin.colors;
   useFrame(({clock})=>{const t=clock.elapsedTime;if(root.current)root.current.position.y=-.15+Math.sin(t*(victory?8:1.7))*(victory ? .12 : .035);if(body.current){body.current.rotation.z=victory?Math.sin(t*8)*.18:Math.sin(t*1.1)*.025;body.current.rotation.y=Math.sin(t*.7)*.045;}});
   return <group ref={root} position={[0,-.15,1.2]} onPointerDown={(event)=>{event.stopPropagation();event.target.setPointerCapture(event.pointerId);}} onPointerMove={(event)=>{if(event.buttons===1&&root.current)root.current.rotation.y+=event.movementX*.012;}}><group ref={body}>
-    <mesh position={[0,1.55,0]} castShadow><capsuleGeometry args={[.38,.82,5,12]}/><meshStandardMaterial color={suit} roughness={.62}/></mesh>
-    <mesh position={[0,2.32,0]} castShadow><sphereGeometry args={[.34,20,16]}/><meshStandardMaterial color="#e8b995"/></mesh>
+    <mesh position={[0,1.55,0]} castShadow><capsuleGeometry args={[.4,.9,8,16]}/><meshStandardMaterial color={suit} roughness={.55}/></mesh>
+    <mesh position={[0,1.58,.34]} castShadow><boxGeometry args={[.48,.48,.1]}/><meshStandardMaterial color={secondary} metalness={.25} roughness={.4}/></mesh>
+    <mesh position={[0,1.58,.4]}><boxGeometry args={[.2,.07,.025]}/><meshBasicMaterial color={skin.accent}/></mesh>
+    <mesh position={[0,2.32,0]} castShadow><sphereGeometry args={[.34,24,20]}/><meshStandardMaterial color="#dcae8d"/></mesh>
+    <mesh position={[0,2.58,-.02]} scale={[1,.42,1]}><sphereGeometry args={[.35,18,14]}/><meshStandardMaterial color={skin.style==="street"?"#29253e":secondary}/></mesh>
     <mesh position={[0,2.39,.25]}><sphereGeometry args={[.075,12,10]}/><meshStandardMaterial color="#202b3b"/></mesh>
-    <mesh position={[-.46,1.6,0]} rotation={[0,0,-.18]} castShadow><capsuleGeometry args={[.13,.66,4,8]}/><meshStandardMaterial color={suit}/></mesh>
-    <mesh position={[.46,1.6,0]} rotation={[0,0,.18]} castShadow><capsuleGeometry args={[.13,.66,4,8]}/><meshStandardMaterial color={suit}/></mesh>
-    <mesh position={[-.2,.7,0]} castShadow><capsuleGeometry args={[.16,.68,4,8]}/><meshStandardMaterial color="#273447"/></mesh>
-    <mesh position={[.2,.7,0]} castShadow><capsuleGeometry args={[.16,.68,4,8]}/><meshStandardMaterial color="#273447"/></mesh>
-    <mesh position={[0,1.58,.34]}><boxGeometry args={[.3,.28,.05]}/><meshStandardMaterial color="#71d6e4" emissive={suit} emissiveIntensity={.25}/></mesh>
+    <mesh position={[-.46,1.6,0]} rotation={[0,0,-.18]} castShadow><capsuleGeometry args={[.15,.68,6,10]}/><meshStandardMaterial color={suit}/></mesh>
+    <mesh position={[.46,1.6,0]} rotation={[0,0,.18]} castShadow><capsuleGeometry args={[.15,.68,6,10]}/><meshStandardMaterial color={suit}/></mesh>
+    <mesh position={[-.2,.7,0]} castShadow><capsuleGeometry args={[.17,.68,6,10]}/><meshStandardMaterial color={secondary}/></mesh>
+    <mesh position={[.2,.7,0]} castShadow><capsuleGeometry args={[.17,.68,6,10]}/><meshStandardMaterial color={secondary}/></mesh>
+    <mesh position={[0,1.58,.42]}><boxGeometry args={[.3,.28,.05]}/><meshStandardMaterial color={detail} emissive={skin.accent} emissiveIntensity={.25}/></mesh>
   </group></group>;
 }
 
