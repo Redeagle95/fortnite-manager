@@ -1,0 +1,3 @@
+type CompetitionOrigin =
+  | "HISTORICAL_VERIFIED"
+  | "PROCEDURALLY_GENERATED";
