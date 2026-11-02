@@ -91,7 +91,7 @@ describe("Battle Royale simulation", () => {
   });
   it("uses five decision zones and contracts the storm", () => {
     const match = createBattleRoyale(888, "TRIO", "pine-woods");
-    resolveDrop(match, { type: "LOOT" });
+    resolveDrop(match, { type: "ROTATE" });
     expect(match.phaseIndex).toBe(1);
     expect(match.storm.radius).toBe(5000);
     expect(match.stormTarget.radius).toBe(4200);
