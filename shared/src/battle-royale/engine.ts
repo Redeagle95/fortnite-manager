@@ -26,10 +26,10 @@ function createSkills(random: SeededRandom, base?: number): PlayerSkill {
   };
 }
 function createInventory(): Inventory { return { weapons: [], items: [], ammo: {}, maxWeaponSlots: 5 }; }
-function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch["mode"], locationId: string, x: number, y: number, random: SeededRandom, skillBase?: number): BattleTeam {
+function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch["mode"], locationId: string, x: number, y: number, random: SeededRandom, skillBase?: number, playerRatings?: number[]): BattleTeam {
   const players: BattlePlayer[] = Array.from({ length: TEAM_SIZE[mode] }, (_, i) => ({
     id: `${id}-p${i + 1}`, name: isUser ? (i === 0 ? "Toi" : `Mate ${i}`) : `${name} ${i + 1}`,
-    skills: createSkills(random, skillBase), alive: true, health: 100, shield: 0, knocked: false,
+    skills: createSkills(random, playerRatings?.[i] ?? skillBase), alive: true, health: 100, shield: 0, knocked: false,
   }));
   return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0 };
 }
@@ -224,12 +224,15 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
   }
 }
-export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], dropLocationId: string, teamNames = ["Ton équipe"]): BattleMatch {
+export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], dropLocationId: string, teamNames = ["Ton équipe"], playerRatings?: number[]): BattleMatch {
   if (!Number.isInteger(seed)) throw new Error("La seed doit être un entier.");
+  if (playerRatings && (playerRatings.length !== TEAM_SIZE[mode] || playerRatings.some(rating => !Number.isFinite(rating) || rating < 0 || rating > 100))) {
+    throw new Error(`Il faut fournir ${TEAM_SIZE[mode]} notes de joueurs comprises entre 0 et 100.`);
+  }
   const random = new SeededRandom(seed);
   const location = BATTLE_ROYALE_MAP.locations.find(l => l.id === dropLocationId);
   if (!location) throw new Error("Point d'atterrissage inconnu.");
-  const userTeam = createTeam("user-team", teamNames[0] ?? "Ton équipe", true, mode, location.id, location.x, location.y, random, 72);
+  const userTeam = createTeam("user-team", teamNames[0] ?? "Ton équipe", true, mode, location.id, location.x, location.y, random, 72, playerRatings);
   const teams: BattleTeam[] = [userTeam];
   for (let i = 0; i < 24; i++) {
     const poi = BATTLE_ROYALE_MAP.locations[random.nextInt(0, BATTLE_ROYALE_MAP.locations.length - 1)];
@@ -257,7 +260,7 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
     event(match, "LOOT", "Loot de spawn", `${spawnLoot.collected.length} objet(s) récupéré(s) avant le combat.`);
     fight(match, random);
   } else if (action.type === "ROTATE") {
-    const target = nearestLocation(match, random); moveTeam(match, target);
+    const target = match.map.locations.find(l => l.id === action.locationId) ?? nearestLocation(match, random); moveTeam(match, target);
     const drops = makeDrop(match, target, random); const collected = collectLoot(match.userTeam, drops);
     match.lootOnGround.push(...collected.remaining);
     event(match, "LOOT", "Loot après rotation", `${collected.collected.length} objet(s) récupéré(s) à ${target.name}.`);
