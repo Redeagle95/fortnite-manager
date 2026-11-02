@@ -266,7 +266,7 @@ describe("Battle Royale simulation", () => {
     const target = match.userTeam.players[1];
     target.health = 40;
     match.userTeam.inventory.items.push({definitionId:"test-medkit",name:"Medkit",rarity:"COMMON",quantity:1,kind:"HEAL",heal:40});
-    takeZoneAction(match, {type:"HEAL",itemDefinitionId:"test-medkit"});
+    takeZoneAction(match, {type:"HEAL",itemDefinitionId:"test-medkit",playerId:target.id});
     expect(target.health).toBe(90);
     target.knocked = true;
     target.health = 0;
