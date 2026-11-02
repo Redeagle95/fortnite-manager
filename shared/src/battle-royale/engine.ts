@@ -147,14 +147,23 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
   const allies = activePlayers(match.userTeam);
   const enemyEliminations = won ? enemyAlive.length : random.nextInt(0, Math.max(1, enemyAlive.length - 1));
   const allyLosses = won ? (random.next() < 0.12 ? 1 : 0) : Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)));
-  for (let i = 0; i < enemyEliminations; i++) eliminatePlayer(enemyAlive[i]);
+  const userKiller = activePlayers(match.userTeam)[0];
+  for (let i = 0; i < enemyEliminations; i++) {
+    const victim = enemyAlive[i];
+    eliminatePlayer(victim);
+    event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
+  }
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
   for (let i = 0; i < allyLosses; i++) {
     const downed = allies[allies.length - 1 - i];
     downed.knocked = true; downed.health = 0; downed.shield = 0;
   }
   if (!activePlayers(match.userTeam).length && match.userTeam.players.some(player => player.knocked && player.alive)) {
-    for (const player of match.userTeam.players.filter(player => player.knocked && player.alive)) eliminatePlayer(player);
+    const enemyKiller = activePlayers(enemy)[0];
+    for (const player of match.userTeam.players.filter(player => player.knocked && player.alive)) {
+      eliminatePlayer(player);
+      event(match, "ELIMINATION", "Élimination", `${enemyKiller?.name ?? enemy.name} (${enemy.name}) élimine ${player.name} (${match.userTeam.name}).`);
+    }
   }
   if (!alivePlayers(enemy).length) { enemy.alive = false; enemy.placement = match.teamsRemaining; }
   if (!alivePlayers(match.userTeam).length) match.userTeam.alive = false;
