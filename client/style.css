@@ -27,3 +27,17 @@
 /* Storm contraction and resource dashboard */
 .next-storm-circle{position:absolute;border:2px dashed #ffe08a;border-radius:50%;background:#ffdc7210;box-shadow:0 0 14px #ffdc7255;pointer-events:none;transition:all 1.5s ease;z-index:1}.storm-circle{transition:all 1.5s ease;z-index:2}.poi{z-index:3}
 .materials-panel{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.materials-title{display:flex;justify-content:space-between;font-size:9px;font-weight:900;letter-spacing:1.3px;color:#dce9f8;margin-bottom:10px}.materials-title small{font-size:8px;color:var(--muted)}.material-row{display:grid;grid-template-columns:76px minmax(45px,1fr) 66px;align-items:center;gap:8px;margin:9px 0;font-size:9px;color:#c5d4e6}.material-row>b{text-align:right;font-size:9px;color:#fff}.material-track{height:7px;background:#26364a;border-radius:9px;overflow:hidden}.material-track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#4f9e77,#7ce2a8);border-radius:9px;transition:width .5s ease}
+
+
+/* Live enemy movement and elimination feed */
+.team-marker{position:absolute;z-index:4;transform:translate(-50%,-50%);width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:900;border:1px solid #fff;box-shadow:0 2px 8px #000b;pointer-events:auto}
+.team-marker.opponent{background:#d94d5c;color:#fff}
+.team-marker.user{width:25px;height:25px;background:#42d69b;color:#092117;border:2px solid #eafff5;box-shadow:0 0 0 5px #42d69b35,0 2px 8px #000b}
+.elimination-card{background:linear-gradient(145deg,#121e30,#0e1725);border:1px solid var(--line);border-radius:13px;padding:16px;min-width:0;max-height:300px;overflow:hidden}
+#elimination-feed{max-height:245px;overflow:auto;padding-right:5px}
+.elimination-row{padding:9px 0;border-bottom:1px solid #29384d}
+.elimination-row b{display:block;font-size:10px;line-height:1.5;color:#f2f6fc}
+.elimination-row small{display:block;margin-top:4px;font-size:8px;color:#8297b1}
+.empty-feed{font-size:10px;line-height:1.6;color:var(--muted)}
+.map-legend .legend-opponent{background:#d94d5c}
+@media(max-width:900px){.bottom-grid{grid-template-columns:1fr}}
