@@ -162,8 +162,8 @@ function actionsForZone(match) {
     {type:"FIGHT_OUTSIDE",label:"Jouer extérieur",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}
   ];
   if (match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && match.userTeam.players.some(p=>!p.alive&&!p.rebooted) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REBOOT",label:"Reboot un mate éliminé",description:"Faire revenir un joueur avec 100 PV grâce à un jeton de reboot.",risk:"MEDIUM"});
-  if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV.",risk:"MEDIUM"});
-  if (match.userTeam.inventory.items.some(item=>item.kind==="HEAL"&&item.quantity>0) && match.userTeam.players.some(p=>p.alive&&!p.knocked&&(p.health<100||p.shield<100))) actions.unshift({type:"HEAL",label:"Utiliser un soin",description:"Soigner le joueur le plus affaibli avec un consommable disponible.",risk:"LOW"});
+  if (match.phaseIndex < 6 && match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV.",risk:"MEDIUM"});
+  if (match.phaseIndex < 6 && match.userTeam.inventory.items.some(item=>item.kind==="HEAL"&&item.quantity>0) && match.userTeam.players.some(p=>p.alive&&!p.knocked&&(p.health<100||p.shield<100))) actions.unshift({type:"HEAL",label:"Utiliser un soin",description:"Soigner le joueur le plus affaibli avec un consommable disponible.",risk:"LOW"});
   if (match.phaseIndex >= 3 && match.phaseIndex < 6) actions.push({type:"HOLD_POSITION",label:"Construire une position défensive",description:"Dépenser 10 matériaux pour sécuriser temporairement la position.",risk:"LOW"});
   return actions;
 }
