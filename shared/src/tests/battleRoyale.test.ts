@@ -37,12 +37,29 @@ describe("Battle Royale simulation", () => {
     expect(match.userTeam.players[0].health).toBe(95);
   });
 
-  it("adds surge tags to team damage progress", () => {
+  it("adds real opponent damage when farming surge tags", () => {
     const match = createBattleRoyale(6104, "TRIO", "pine-woods");
-    resolveDrop(match, { type: "LOOT" });
+    resolveDrop(match, { type: "ROTATE" });
+    const sameSpot = match.teams.filter(team => !team.isUser && team.alive && team.dropLocationId === match.currentLocationId);
+    const enemies = sameSpot.length ? sameSpot : match.teams.filter(team => !team.isUser && team.alive);
+    const enemy = enemies.sort((a, b) => Math.hypot(a.position.x - match.userTeam.position.x, a.position.y - match.userTeam.position.y) - Math.hypot(b.position.x - match.userTeam.position.x, b.position.y - match.userTeam.position.y))[0];
+    const before = enemy.players.reduce((sum, player) => sum + player.health + player.shield, 0);
     takeZoneAction(match, { type: "FARM_SURGE" });
+    const after = enemy.players.reduce((sum, player) => sum + player.health + player.shield, 0);
     expect(match.userTeam.damageDealt).toBeGreaterThan(0);
+    expect(after).toBeLessThan(before);
     expect(match.events.some(item => item.type === "SURGE")).toBe(true);
+  });
+
+  it("applies storm surge pulses when the team's damage threshold is missed", () => {
+    const match = createBattleRoyale(6105, "TRIO", "pine-woods");
+    match.stage = "ZONE";
+    match.phaseIndex = 3;
+    match.stormSurgeActive = true;
+    match.surgeThreshold = 300;
+    advanceMatchTime(match, 5);
+    expect(match.stormSurgeActive).toBe(true);
+    expect(match.surgeDamageTaken).toBe(25);
   });
 
   it("creates a full lobby and offers spawn decisions", () => {
