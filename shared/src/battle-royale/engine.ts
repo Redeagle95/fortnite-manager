@@ -293,7 +293,7 @@ function updateSurge(match: BattleMatch): void {
 
 export function advanceMatchTime(match: BattleMatch, gameSeconds = 5): BattleMatch {
   if (match.stage !== "LOOT" && match.stage !== "ZONE") return match;
-  const safeSeconds = Math.max(1, Math.min(30, Math.floor(gameSeconds)));
+  const safeSeconds = Math.max(1, Math.min(300, Math.floor(gameSeconds)));
   for (let second = 0; second < safeSeconds && match.stage !== "FINISHED"; second++) {
     match.gameTimeSeconds += 1;
     updateStormCircle(match);
