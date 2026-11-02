@@ -47,6 +47,7 @@ describe("Battle Royale simulation", () => {
     takeZoneAction(match, { type: "FARM_SURGE" });
     const after = enemy.players.reduce((sum, player) => sum + player.health + player.shield, 0);
     expect(match.userTeam.damageDealt).toBeGreaterThan(0);
+    expect(match.userTeam.damageDealt).toBe(match.userTeam.players.reduce((sum, player) => sum + player.damageDealt, 0));
     expect(after).toBeLessThan(before);
     expect(match.events.some(item => item.type === "SURGE")).toBe(true);
   });
@@ -298,6 +299,72 @@ describe("Battle Royale simulation", () => {
     fragger.role = "FRAGGER";
     const withFragger = getFightProbability(match);
     expect(withFragger).toBeGreaterThan(withoutFragger);
+  });
+
+  it("focus fire concentrates damage on the selected opponent and credits the individual player", () => {
+    const match = createBattleRoyale(6110, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const enemies = match.teams.filter(team => !team.isUser && team.alive);
+    const samePoi = enemies.filter(team => team.dropLocationId === match.currentLocationId);
+    const enemy = (samePoi.length ? samePoi : enemies).sort((a, b) =>
+      Math.hypot(a.position.x - match.userTeam.position.x, a.position.y - match.userTeam.position.y)
+      - Math.hypot(b.position.x - match.userTeam.position.x, b.position.y - match.userTeam.position.y))[0];
+    const target = enemy.players.find(player => player.alive)!;
+    target.health = 30;
+    target.shield = 0;
+    match.userTeam.inventory.weapons = [{id:"focus-rifle",definitionId:"focus-rifle",name:"Rifle",category:"ASSAULT_RIFLE",rarity:"RARE",damage:80,magazine:30,ammo:30}];
+    takeZoneAction(match, { type: "FOCUS_FIRE", targetPlayerId: target.id });
+    expect(target.alive).toBe(false);
+    expect(match.userTeam.players[0].eliminations).toBe(1);
+    expect(match.userTeam.players[0].damageDealt).toBeGreaterThanOrEqual(30);
+    expect(match.userTeam.damageDealt).toBe(match.userTeam.players.reduce((sum, player) => sum + player.damageDealt, 0));
+  });
+
+  it("makes boxfight damage respond to shotgun choice, building skill and materials", () => {
+    const standard = createBattleRoyale(6111, "DUO", "pine-woods");
+    const boxfight = createBattleRoyale(6111, "DUO", "pine-woods");
+    resolveDrop(standard, { type: "LOOT" });
+    resolveDrop(boxfight, { type: "LOOT" });
+    standard.userTeam.inventory.weapons = [{id:"standard-rifle",definitionId:"standard-rifle",name:"Rifle",category:"ASSAULT_RIFLE",rarity:"RARE",damage:55,magazine:30,ammo:30}];
+    boxfight.userTeam.inventory.weapons = [{id:"box-shotgun",definitionId:"box-shotgun",name:"Pompe",category:"SHOTGUN",rarity:"RARE",damage:55,magazine:5,ammo:5}];
+    for (const player of boxfight.userTeam.players) player.skills.building = 100;
+    boxfight.userTeam.resources = {wood:500,stone:500,metal:500};
+    const standardBefore = standard.userTeam.damageDealt;
+    const boxBefore = boxfight.userTeam.damageDealt;
+    takeZoneAction(standard, { type: "FIGHT" });
+    takeZoneAction(boxfight, { type: "BOXFIGHT" });
+    expect(boxfight.userTeam.damageDealt - boxBefore).toBeGreaterThan(standard.userTeam.damageDealt - standardBefore);
+  });
+
+  it("disengages to another location without resolving an optional fight", () => {
+    const match = createBattleRoyale(6112, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const previousLocation = match.currentLocationId;
+    const previousDamage = match.userTeam.damageDealt;
+    takeZoneAction(match, { type: "DISENGAGE" });
+    expect(match.currentLocationId).not.toBe(previousLocation);
+    expect(match.userTeam.damageDealt).toBe(previousDamage);
+    expect(match.events.some(item => item.title === "Désengagement")).toBe(true);
+  });
+
+  it("automatically chooses the most useful heal for the teammate's missing health or shield", () => {
+    const match = createBattleRoyale(6113, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const healthTarget = match.userTeam.players[1];
+    const shieldTarget = match.userTeam.players[0];
+    healthTarget.health = 40;
+    healthTarget.shield = 100;
+    shieldTarget.health = 100;
+    shieldTarget.shield = 0;
+    match.userTeam.inventory.items = [
+      {definitionId:"mini-test",name:"Mini potion",rarity:"UNCOMMON",quantity:1,kind:"HEAL",shield:25},
+      {definitionId:"medkit-test",name:"Medkit",rarity:"COMMON",quantity:1,kind:"HEAL",heal:50}
+    ];
+    takeZoneAction(match, { type: "HEAL" });
+    expect(healthTarget.health).toBe(100);
+    expect(healthTarget.shield).toBe(100);
+    expect(shieldTarget.shield).toBe(0);
+    expect(match.userTeam.inventory.items.some(item => item.definitionId === "medkit-test")).toBe(false);
   });
 
   it("makes Support improve healing and revive health", () => {
