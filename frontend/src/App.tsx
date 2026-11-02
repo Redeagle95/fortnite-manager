@@ -1,8 +1,7 @@
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Activity, Bell, Check, ChevronDown, ChevronRight, CircleHelp, Crown, Gamepad2, Globe2, Menu, Settings, Shield, ShoppingBag, Sparkles, Swords, Trophy, UserRound, Users, Zap } from "lucide-react";
 import LobbyScene from "./LobbyScene";
 import { formatSeasonDate, resolveSeason } from "./seasons/seasonResolver";
-import { seasonRegistry } from "./seasons/seasonRegistry";
 import { outfits, type Outfit } from "./outfits";
 import "./styles.css";
 
@@ -13,8 +12,16 @@ const navItems = [
   { label: "Profil", icon: UserRound }
 ];
 
+function getLocalDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function App() {
-  const [careerDate, setCareerDate] = useState("2026-06-15");
+  const [careerDate, setCareerDate] = useState(getLocalDate);
   const [activeNav, setActiveNav] = useState("Jouer");
   const [mode, setMode] = useState("Solo");
   const [ready, setReady] = useState(false);
@@ -26,26 +33,22 @@ function App() {
   const equipped = outfits.find(item => item.id === skinId) ?? outfits[0];
   const [victory, setVictory] = useState(false);
   const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
-  const [seasonMenu, setSeasonMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [notifications, setNotifications] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [panelMessage, setPanelMessage] = useState("");
   const season = useMemo(() => resolveSeason(careerDate), [careerDate]);
-  const seasonIndex = seasonRegistry.findIndex((item) => item.id === season.id);
-  const nextSeason = seasonRegistry[Math.min(seasonIndex + 1, seasonRegistry.length - 1)];
 
-  const selectSeason = (id: string) => {
-    const selected = seasonRegistry.find((item) => item.id === id);
-    if (selected) setCareerDate(selected.startsAt);
-    setSeasonMenu(false);
-    setReady(false);
-  };
-  const moveSeason = (step: -1 | 1) => {
-    const target = seasonRegistry[Math.max(0, Math.min(seasonRegistry.length - 1, seasonIndex + step))];
-    setCareerDate(target.startsAt);
-    setReady(false);
-  };
+  // La saison suit automatiquement la date locale, sans intervention du joueur.
+  useEffect(() => {
+    const refreshDate = () => setCareerDate(getLocalDate());
+    const interval = window.setInterval(refreshDate, 60_000);
+    window.addEventListener("focus", refreshDate);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshDate);
+    };
+  }, []);
   const chooseNav = (label: string) => {
     setActiveNav(label);
     setMobileMenu(false);
@@ -77,8 +80,7 @@ function App() {
 
     <aside className="lobby-sidebar">
       <div className="sidebar-season-label">UNIVERS SAISONNIER</div>
-      <button className="season-selector" onClick={()=>setSeasonMenu(v=>!v)}><span className="season-glyph"><Sparkles size={18}/></span><span><small>ÈRE SÉLECTIONNÉE</small><strong>{season.year} · {season.environment.toUpperCase()}</strong></span><ChevronDown size={16}/></button>
-      {seasonMenu&&<div className="season-dropdown">{seasonRegistry.map(item=><button key={item.id} className={item.id===season.id?"chosen":""} onClick={()=>selectSeason(item.id)}><span className="season-swatch" style={{background:item.accent}}/><span><b>{item.label}</b><small>{item.subtitle}</small></span>{item.id===season.id&&<Check size={15}/>}</button>)}</div>}
+      <div className="season-selector season-current"><span className="season-glyph"><Sparkles size={18}/></span><span><small>SAISON EN COURS</small><strong>{season.year} · {season.environment.toUpperCase()}</strong></span><span className="online-dot"/></div>
       <div className="season-story"><span className="eyebrow">SAISON {season.year}</span><h1>{season.title}</h1><p>{season.description}</p><div className="location-line"><Globe2 size={14}/>{season.location}</div></div>
       <div className="side-divider"/>
       <div className="side-section-title">MENU PRINCIPAL</div>
@@ -90,7 +92,7 @@ function App() {
       <div className="profile-panel"><div className="profile-panel-head"><span>TON PROFIL · DÉMO</span><span className="online-dot"/></div><div className="profile-identity"><div className="large-avatar">P1</div><div><strong>PLAYER_01</strong><small>JOUEUR COMPÉTITIF</small></div></div><div className="level-row"><span>NIVEAU 42</span><b>7 240 / 10 000 XP</b></div><div className="xp-track"><span style={{width:"72.4%"}}/></div><div className="profile-stats"><div><b>12</b><small>VICTOIRES</small></div><div><b>4.8</b><small>K/D</small></div><div><b>68%</b><small>TOP 10</small></div></div></div>
       <div className="rail-card challenges"><div className="rail-heading"><span>DÉFIS DISPONIBLES</span><Zap size={15}/></div><div className="challenge-item"><span className="challenge-icon"><Trophy size={15}/></span><span><b>Objectif quotidien</b><small>Terminer une partie</small><i><em style={{width:"35%"}}/></i></span><strong>1/3</strong></div><div className="challenge-item"><span className="challenge-icon"><Swords size={15}/></span><span><b>Défi compétitif</b><small>Jouer avec ton escouade</small><i><em style={{width:"0%"}}/></i></span><strong>0/5</strong></div></div>
       <div className="rail-card friends-card"><div className="rail-heading"><span>AMIS CONNECTÉS</span><Users size={15}/></div><div className="empty-friends"><Users size={23}/><span>Aucun ami connecté</span><small>Ton escouade t'attend.</small></div></div>
-      <div className="season-next"><span>PROCHAINE ÈRE</span><strong>{nextSeason.year} · {nextSeason.subtitle}</strong><button onClick={()=>moveSeason(1)} disabled={seasonIndex===seasonRegistry.length-1}>Découvrir <ChevronRight size={14}/></button></div>
+      <div className="season-next season-auto"><span><span className="online-dot"/> ROTATION AUTOMATIQUE</span><strong>{season.subtitle}</strong><small>La saison change selon la date du jeu.</small></div>
     </section>
 
     {wardrobeTab && <section className="wardrobe-panel"><div className="wardrobe-head"><div><span className="eyebrow">{wardrobeTab==="shop"?"COLLECTION COSMÉTIQUE":"TON INVENTAIRE"}</span><h2>{wardrobeTab==="shop"?"Boutique des tenues":"Casier"}</h2><p>{wardrobeTab==="shop"?"Découvre des styles originaux pour ton personnage.":"Équipe une tenue que tu possèdes."}</p></div><button className="wardrobe-close" onClick={()=>setWardrobeTab(null)}>×</button></div><div className="wardrobe-tabs"><span>◈ {vbucks.toLocaleString("fr-FR")} crédits</span><small> ACHATS DE DÉMONSTRATION </small></div><div className="outfit-grid">{outfits.filter(item=>wardrobeTab==="shop"||owned.includes(item.id)).map(item=><article className="outfit-card" key={item.id}><div className="outfit-art" style={{"--outfit-a":item.colors[0],"--outfit-b":item.colors[1],"--outfit-c":item.colors[2]} as React.CSSProperties}><div className="mini-character"><i/><b/><em/><span/></div><label>{item.rarity}</label></div><div className="outfit-info"><strong>{item.name}</strong><p>{item.description}</p><button onClick={()=>{if(wardrobeTab==="shop")buyOutfit(item);else if(owned.includes(item.id)){setSkinId(item.id);setNotice(item.name+" équipé !");}}}>{skinId===item.id?"ÉQUIPÉ":owned.includes(item.id)?"ÉQUIPER":item.price.toLocaleString("fr-FR")+" CRÉDITS"}</button></div></article>)}</div><p className="wardrobe-foot">Aucun paiement réel · les crédits sont fictifs et locaux.</p></section>}
