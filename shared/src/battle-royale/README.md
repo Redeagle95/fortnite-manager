@@ -66,3 +66,6 @@ Knockdowns and revives remain active throughout the match: a downed teammate can
 - Healing can be used when teammates need health or shield. Ground loot remains available for later pickup; when weapon slots are full, choose which weapon to replace.
 - After the sixth contraction, the final safe zone moves continuously. Zone 7 remains active until only one squad is left.
 - Match results award placement points plus two points per team elimination.
+
+
+Additional mechanics in this branch: one reboot token per teammate slot (usable before the final zone), POI-specific ground loot, mid-game supply drops with improved rarity odds, and a six-game FNCS-style points series stored in the browser.
