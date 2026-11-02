@@ -46,7 +46,7 @@ function updateStrategyPreview() {
   $("strategy-impact").innerHTML = '<b>IMPACT DE LA STRATÉGIE</b><span>' + descriptions[strategy] + '</span>';
 }
 function fillLocations(locations) {
-  $("drop-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · Danger ${l.danger}/100</option>`).join("");
+  $("drop-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · Loot ${l.lootQuality}/100 · Danger ${l.danger}/100</option>`).join("");
   $("rotation-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join("");
   $("drop-location").value = selectedDrop;
   $("setup-poi-layer").innerHTML = locations.map(l => `<button class="setup-poi ${l.id === $("drop-location").value ? "selected" : ""}" style="left:${l.x / 10000 * 100}%;top:${l.y / 10000 * 100}%" data-setup-poi="${l.id}" title="Loot ${l.lootQuality}/100 · Danger ${l.danger}/100">${escapeHtml(l.name)}</button>`).join("");
@@ -84,10 +84,15 @@ function renderMap(match) {
     nextCircle.classList.remove("hidden");
   } else nextCircle.classList.add("hidden");
   const supplyLocations = new Set((match.lootOnGround || []).filter(drop => drop.isSupplyDrop).map(drop => drop.locationId));
+  const lootLocations = new Set((match.lootOnGround || []).filter(drop => !drop.isSupplyDrop).map(drop => drop.locationId));
   const poiButtons = match.map.locations.map(location => {
     const isUser = location.id === match.currentLocationId;
-    const supplyTag = supplyLocations.has(location.id) ? " · 📦" : "";
-    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}${supplyTag}</button>`;
+    const hasSupply = supplyLocations.has(location.id);
+    const hasLoot = lootLocations.has(location.id);
+    const markerTag = hasSupply ? " · 📦 RAVITAILLEMENT" : hasLoot ? " · ◈ LOOT" : "";
+    const markerClass = hasSupply ? "supply-drop" : hasLoot ? "has-ground-loot" : "";
+    const markerTitle = hasSupply ? " · RAVITAILLEMENT DISPONIBLE" : hasLoot ? " · objets au sol" : "";
+    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""} ${markerClass}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Qualité du loot ${location.lootQuality}/100 · Danger ${location.danger}/100${markerTitle}">${escapeHtml(location.name)}${markerTag}</button>`;
   }).join("");
   $("poi-layer").innerHTML = poiButtons;
   const markerLayer = $("team-marker-layer");

@@ -415,4 +415,42 @@ describe("Battle Royale simulation", () => {
     expect(getFightProbability(aggressive)).toBeGreaterThan(getFightProbability(prudent));
   });
 
+  it("makes higher-quality POIs produce better weapon rarities over repeated drops", () => {
+    const rarityScore = { COMMON: 1, UNCOMMON: 2, RARE: 3, EPIC: 4, LEGENDARY: 5, MYTHIC: 6 } as const;
+    let lowQualityScore = 0;
+    let highQualityScore = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const low = createBattleRoyale(12000 + seed, "SOLO", "quiet-farm");
+      const high = createBattleRoyale(12000 + seed, "SOLO", "tilted-district");
+      resolveDrop(low, { type: "LOOT" });
+      resolveDrop(high, { type: "LOOT" });
+      lowQualityScore += low.userTeam.inventory.weapons.reduce((sum, weapon) => sum + rarityScore[weapon.rarity], 0);
+      highQualityScore += high.userTeam.inventory.weapons.reduce((sum, weapon) => sum + rarityScore[weapon.rarity], 0);
+    }
+    expect(highQualityScore).toBeGreaterThan(lowQualityScore);
+  });
+
+  it("keeps uncollected items at their original POI and prevents remote pickup", () => {
+    const match = createBattleRoyale(12061, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const remote = match.map.locations.find(location => location.id !== match.currentLocationId)!;
+    const drop = { id: "original-poi-loot", kind: "WEAPON" as const, name: "Rifle au sol", definitionId: "ground-rifle", category: "ASSAULT_RIFLE" as const, rarity: "EPIC" as const, damage: 60, quantity: 1, locationId: remote.id };
+    match.lootOnGround.push(drop);
+    takeZoneAction(match, { type: "PICKUP_LOOT", dropId: drop.id });
+    expect(match.lootOnGround.some(item => item.id === drop.id && item.locationId === remote.id)).toBe(true);
+    expect(match.userTeam.inventory.weapons.some(weapon => weapon.id === drop.id)).toBe(false);
+  });
+
+  it("guarantees an Epic-or-better weapon in generated supply drops and marks their POI", () => {
+    const match = createBattleRoyale(12101, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 2;
+    advanceMatchTime(match, 15);
+    const supplyLoot = match.lootOnGround.filter(drop => drop.isSupplyDrop);
+    expect(supplyLoot.length).toBeGreaterThan(0);
+    expect(supplyLoot.every(drop => drop.locationId === supplyLoot[0].locationId)).toBe(true);
+    expect(supplyLoot.some(drop => drop.kind === "WEAPON" && ["EPIC", "LEGENDARY", "MYTHIC"].includes(drop.rarity))).toBe(true);
+    expect(match.events.some(item => item.type === "SUPPLY_DROP")).toBe(true);
+  });
+
 });
