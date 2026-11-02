@@ -34,4 +34,16 @@ describe("Battle Royale simulation", () => {
       expect(["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC"]).toContain(weapon.rarity);
     }
   });
+
+  it("allows an active teammate to revive a knocked teammate", () => {
+    const match = createBattleRoyale(321, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const target = match.userTeam.players[1];
+    target.knocked = true;
+    target.health = 0;
+    takeZoneAction(match, { type: "REVIVE", playerId: target.id });
+    expect(target.knocked).toBe(false);
+    expect(target.alive).toBe(true);
+    expect(target.health).toBeGreaterThan(0);
+  });
 });
