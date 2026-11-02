@@ -537,7 +537,7 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
   }
 
   // Supply drops appear in the mid-game at a safe POI and contain higher-rarity loot.
-  if (match.phaseIndex >= 2 && match.phaseIndex <= 5 && random.next() < 0.055 && !match.lootOnGround.some(drop => drop.isSupplyDrop)) {
+  if (match.phaseIndex >= 2 && match.phaseIndex <= 5 && !match.events.some(item => item.type === "SUPPLY_DROP")) {
     const safeDropLocations = match.map.locations.filter(location => isInsideStorm(location.x, location.y, match.stormTarget));
     const pool = safeDropLocations.length ? safeDropLocations : match.map.locations;
     const supplyLocation = pool[random.nextInt(0, pool.length - 1)];
