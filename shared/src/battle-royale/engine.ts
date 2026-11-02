@@ -35,9 +35,9 @@ function createInventory(): Inventory { return { weapons: [], items: [], ammo: {
 function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch["mode"], locationId: string, x: number, y: number, random: SeededRandom, skillBase?: number, playerRatings?: number[], strategy: BattleMatch["userTeam"]["strategy"] = "STRATEGIC"): BattleTeam {
   const players: BattlePlayer[] = Array.from({ length: TEAM_SIZE[mode] }, (_, i) => ({
     id: `${id}-p${i + 1}`, name: isUser ? (i === 0 ? "Toi" : `Mate ${i}`) : `${name} ${i + 1}`,
-    skills: createSkills(random, playerRatings?.[i] ?? skillBase), role: (["IGL", "FRAGGER", "SUPPORT", "SCOUT"] as const)[i] ?? "SUPPORT", eliminations: 0, damageDealt: 0, alive: true, health: 100, shield: 0, knocked: false,
+    skills: createSkills(random, playerRatings?.[i] ?? skillBase), role: (["IGL", "FRAGGER", "SUPPORT", "SCOUT"] as const)[i] ?? "SUPPORT", eliminations: 0, damageDealt: 0, rebooted: false, alive: true, health: 100, shield: 0, knocked: false,
   }));
-  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, strategy, placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0, damageDealt: 0 };
+  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, strategy, rebootTokens: Math.max(0, players.length - 1), placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0, damageDealt: 0 };
 }
 function event(match: BattleMatch, type: BattleEvent["type"], title: string, description: string): BattleEvent {
   const item = { id: `event-${match.events.length + 1}`, phase: match.phaseIndex, type, title, description, createdAt: Date.now() };
@@ -573,6 +573,17 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       event(match, "INFO", "Réanimation", summary);
       break;
     }
+    case "REBOOT": {
+      const target = match.userTeam.players.find(player => !player.alive && !player.rebooted && (!action.playerId || player.id === action.playerId));
+      if (match.phaseIndex >= 6 || match.userTeam.rebootTokens <= 0 || activePlayers(match.userTeam).length <= 0 || !target) {
+        event(match, "INFO", "Reboot indisponible", "Il faut un mate actif, un jeton de reboot et être avant le dernier cercle.");
+        break;
+      }
+      target.alive = true; target.knocked = false; target.health = 100; target.shield = 0; target.rebooted = true;
+      match.userTeam.rebootTokens -= 1;
+      event(match, "INFO", "Mate rebooté", `${target.name} revient en partie avec 100 PV. Jetons restants : ${match.userTeam.rebootTokens}.`);
+      break;
+    }
     case "HEAL": {
       const summary = healTeam(match.userTeam, action.itemDefinitionId, action.playerId);
       event(match, "HEAL", "Soin utilisé", summary);
@@ -718,6 +729,8 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
     { type: "FIGHT_LOW", label: "Jouer en bas", description: "Synergie renforcée avec les SMG et les pompes.", risk: "HIGH" },
     { type: "FIGHT_OUTSIDE", label: "Jouer extérieur", description: "Synergie avec les armes à distance et objets utilitaires.", risk: "HIGH" },
   ];
+  const canReboot = match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && activePlayers(match.userTeam).length > 0 && match.userTeam.players.some(player => !player.alive && !player.rebooted);
+  if (canReboot) options.push({ type: "REBOOT", label: "Reboot un mate éliminé", description: "Un jeton disponible permet de faire revenir un joueur avant le dernier cercle.", risk: "MEDIUM" });
   const canRevive = match.userTeam.players.some(player => player.alive && player.knocked) && activePlayers(match.userTeam).length > 0;
   if (canRevive) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV.", risk: "MEDIUM" });
   const needsHealing = match.userTeam.players.some(player => player.alive && !player.knocked && (player.health < 100 || player.shield < 100));
