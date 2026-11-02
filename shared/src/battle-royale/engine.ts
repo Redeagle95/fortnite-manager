@@ -8,11 +8,12 @@ const TEAM_SIZE: Record<BattleMatch["mode"], number> = { SOLO: 1, DUO: 2, TRIO: 
 const rarityWeights: Array<[Rarity, number]> = [["COMMON", 38], ["UNCOMMON", 27], ["RARE", 18], ["EPIC", 10], ["LEGENDARY", 5], ["MYTHIC", 2]];
 
 function rarityRoll(random: SeededRandom, lootQuality = 50): Rarity {
-  const luck = clamp((lootQuality - 50) / 50, -1, 1);
+  // POI quality shifts probability away from common loot and toward high-tier weapons.
+  const quality = clamp(lootQuality) / 100;
   const adjusted: Array<[Rarity, number]> = [
-    ["COMMON", 38 - 6 * luck], ["UNCOMMON", 27 - 2 * luck],
-    ["RARE", 18 + luck], ["EPIC", 10 + 3 * luck],
-    ["LEGENDARY", 5 + 2 * luck], ["MYTHIC", 2 + 2 * luck],
+    ["COMMON", 48 - 18 * quality], ["UNCOMMON", 30 - 6 * quality],
+    ["RARE", 15 + 6 * quality], ["EPIC", 5 + 8 * quality],
+    ["LEGENDARY", 2 + 6 * quality], ["MYTHIC", 4 * quality],
   ];
   const roll = random.next() * 100;
   let cursor = 0;
@@ -540,10 +541,24 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
     const safeDropLocations = match.map.locations.filter(location => isInsideStorm(location.x, location.y, match.stormTarget));
     const pool = safeDropLocations.length ? safeDropLocations : match.map.locations;
     const supplyLocation = pool[random.nextInt(0, pool.length - 1)];
-    const supplyLoot = makeDrop(match, { ...supplyLocation, lootQuality: 100, lootAmount: 9 }, random).slice(0, 8)
-      .map(drop => ({ ...drop, isSupplyDrop: true }));
-    match.lootOnGround.push(...supplyLoot);
-    event(match, "SUPPLY_DROP", "Ravitaillement aérien", `Un ravitaillement arrive à ${supplyLocation.name} avec du loot de meilleure qualité.`);
+    const supplyLoot = makeDrop(match, { ...supplyLocation, lootQuality: 100, lootAmount: 9 }, random).slice(0, 8);
+    // Every crate guarantees at least one Epic weapon.
+    const rarityOrder: Rarity[] = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC"];
+    const guaranteedWeapon = supplyLoot.find(drop => drop.kind === "WEAPON");
+    if (!guaranteedWeapon) {
+      const weapon = WEAPONS[random.nextInt(0, WEAPONS.length - 1)];
+      supplyLoot.push({
+        id: `supply-weapon-${match.gameTimeSeconds}-${supplyLocation.id}`, kind: "WEAPON",
+        name: weapon.name, definitionId: weapon.id, category: weapon.category, rarity: "EPIC",
+        damage: Math.round(weapon.baseDamage * RARITY_MULTIPLIER.EPIC), quantity: 1,
+      });
+    } else if (rarityOrder.indexOf(guaranteedWeapon.rarity) < rarityOrder.indexOf("EPIC")) {
+      const weapon = WEAPONS.find(item => item.id === guaranteedWeapon.definitionId);
+      guaranteedWeapon.rarity = "EPIC";
+      guaranteedWeapon.damage = Math.round((weapon?.baseDamage ?? guaranteedWeapon.damage ?? 40) * RARITY_MULTIPLIER.EPIC);
+    }
+    match.lootOnGround.push(...supplyLoot.map(drop => ({ ...drop, locationId: supplyLocation.id, isSupplyDrop: true })));
+    event(match, "SUPPLY_DROP", "Ravitaillement aérien", `Un ravitaillement arrive à ${supplyLocation.name} : une arme ÉPIQUE ou supérieure est garantie. Le point est marqué sur la carte.`);
   }
 
   // Resolve at most one encounter per team in this tick. Each death gets its own feed entry.
