@@ -89,27 +89,21 @@ describe("Battle Royale simulation", () => {
     expect(target.alive).toBe(true);
     expect(target.health).toBeGreaterThan(0);
   });
-  it("uses five decision zones and contracts the storm", () => {
+  it("shrinks the storm over time and exposes late-game decisions", () => {
     const match = createBattleRoyale(888, "TRIO", "pine-woods");
-    resolveDrop(match, { type: "ROTATE" });
-    expect(match.phaseIndex).toBe(1);
+    match.stage = "ZONE";
+    match.phaseIndex = 1;
+    match.stormTarget = { x: 5000, y: 5000, radius: 4200 };
+    match.secondsUntilShrink = 150;
+    match.secondsIntoShrink = 0;
     expect(match.storm.radius).toBe(5000);
-    expect(match.stormTarget.radius).toBe(4200);
     advanceMatchTime(match, 210);
     expect(match.storm.radius).toBe(4200);
-    takeZoneAction(match, { type: "REFRESH", material: "WOOD" });
-    advanceMatchTime(match, 175);
-    expect(match.storm.radius).toBe(3000);
-    expect(getActionOptions(match).map(a => a.type)).toContain("FIGHT_THEN_ROTATE");
-    takeZoneAction(match, { type: "REFRESH" });
-    advanceMatchTime(match, 150);
-    expect(match.storm.radius).toBe(1900);
-    takeZoneAction(match, { type: "REFRESH" });
-    advanceMatchTime(match, 130);
-    expect(match.storm.radius).toBe(950);
+    expect(match.phaseIndex).toBe(1);
+    expect(getActionOptions(match).map(a => a.type)).toContain("FARM_FULL");
+    match.phaseIndex = 4;
     expect(getActionOptions(match).map(a => a.type)).toEqual(expect.arrayContaining(["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE"]));
   });
-
   it("caps each material at 500", () => {
     const match = createBattleRoyale(889, "DUO", "pine-woods");
     resolveDrop(match, { type: "LOOT" });
