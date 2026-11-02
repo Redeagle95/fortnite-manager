@@ -67,7 +67,9 @@ Knockdowns and revives remain active throughout the match: a downed teammate can
 - Disengage moves the squad toward a safer location without initiating an optional fight on that decision.
 - Healing automatically selects the player/item combination that restores the most missing health and shield without exceeding either 100-point cap.
 - Combat and storm-surge damage and eliminations are attributed to individual teammates; the dashboard shows team totals and each player's personal statistics.
-- Ground loot remains available for later pickup; when weapon slots are full, choose which weapon to replace.
+- POI loot quality changes the rarity distribution: premium locations produce more Epic, Legendary and Mythic weapons, while the Scout adds a further quality bonus. Uncollected loot remains attached to its original POI and can only be picked up there.
+- Supply drops arrive during the mid-game, guarantee at least one Epic-or-better weapon, and are highlighted with a pulsing crate marker on the map until their loot is collected.
+- When all five weapon slots are occupied, choose exactly which carried weapon to replace; the dropped item remains at the POI if no replacement is selected.
 - After the sixth contraction, the final safe zone moves continuously. Zone 7 remains active until only one squad is left.
 - Match results award placement points plus two points per team elimination.
 
