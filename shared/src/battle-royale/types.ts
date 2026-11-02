@@ -6,14 +6,14 @@ export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
 export type TacticalStyle = "HEIGHT" | "MID" | "LOW" | "OUTSIDE";
 export type TeamStrategy = "PRUDENT" | "AGGRESSIVE" | "STRATEGIC" | "OPPORTUNISTIC";
 export type PlayerRole = "IGL" | "FRAGGER" | "SUPPORT" | "SCOUT";
-export type ActionType = "FARM_FULL" | "FARM_HALF_ROTATE" | "FARM_SURGE" | "FIGHT" | "FIGHT_THEN_ROTATE" | "FIGHT_HEIGHT" | "FIGHT_MID" | "FIGHT_LOW" | "FIGHT_OUTSIDE" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE" | "FOCUS_FIRE" | "BOXFIGHT" | "DISENGAGE" | "PICKUP_LOOT";
+export type ActionType = "FARM_FULL" | "FARM_HALF_ROTATE" | "FARM_SURGE" | "FIGHT" | "FIGHT_THEN_ROTATE" | "FIGHT_HEIGHT" | "FIGHT_MID" | "FIGHT_LOW" | "FIGHT_OUTSIDE" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE" | "REBOOT" | "FOCUS_FIRE" | "BOXFIGHT" | "DISENGAGE" | "PICKUP_LOOT";
 
 export interface PlayerSkill {
   aim: number; building: number; gameSense: number; positioning: number;
   decisionMaking: number; teamwork: number; overall: number;
 }
 export interface BattlePlayer {
-  id: string; name: string; skills: PlayerSkill; role: PlayerRole; eliminations: number; damageDealt: number; alive: boolean;
+  id: string; name: string; skills: PlayerSkill; role: PlayerRole; eliminations: number; damageDealt: number; rebooted: boolean; alive: boolean;
   health: number; shield: number; knocked: boolean;
 }
 export interface WeaponInstance {
@@ -31,7 +31,7 @@ export interface Inventory {
 export interface Resources { wood: number; stone: number; metal: number; }
 export interface BattleTeam {
   id: string; name: string; isUser: boolean; players: BattlePlayer[];
-  inventory: Inventory; resources: Resources; eliminations: number; strategy: TeamStrategy;
+  inventory: Inventory; resources: Resources; eliminations: number; strategy: TeamStrategy; rebootTokens: number;
   placement: number | null; dropLocationId: string; alive: boolean;
   position: { x: number; y: number }; builds: number; damageDealt: number;
 }
@@ -81,6 +81,7 @@ export type BattleAction =
   | { type: "HEAL"; playerId?: string; itemDefinitionId?: string }
   | { type: "HOLD_POSITION" }
   | { type: "REVIVE"; playerId?: string }
+  | { type: "REBOOT"; playerId?: string }
   | { type: "FOCUS_FIRE"; targetPlayerId?: string }
   | { type: "BOXFIGHT" }
   | { type: "DISENGAGE"; locationId?: string }
