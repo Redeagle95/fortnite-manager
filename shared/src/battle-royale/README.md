@@ -1,6 +1,13 @@
 # Battle Royale gameplay simulation
 
-This module adds a turn-based Fortnite-inspired Battle Royale core to Fortnite Manager.
+This module adds a turn-based Fortnite-inspired Battle Royale core and browser prototype to Fortnite Manager.
+
+## Run the playable prototype
+1. Run `npm ci` from the repository root.
+2. Run `npm run dev`.
+3. Open `http://localhost:3000` in your browser.
+
+The browser client renders the tactical island map, storm circle, POI markers, spawn setup, action choices, teammate health, inventory, materials and match event log.
 
 ## Current gameplay loop
 1. Create a match with a seed, game mode and drop location.
