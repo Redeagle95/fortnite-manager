@@ -27,6 +27,12 @@ function fillLocations(locations) {
   $("drop-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · Danger ${l.danger}/100</option>`).join("");
   $("rotation-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join("");
   $("drop-location").value = selectedDrop;
+  $("setup-poi-layer").innerHTML = locations.map(l => `<button class="setup-poi ${l.id === $("drop-location").value ? "selected" : ""}" style="left:${l.x / 10000 * 100}%;top:${l.y / 10000 * 100}%" data-setup-poi="${l.id}" title="Loot ${l.lootQuality}/100 · Danger ${l.danger}/100">${escapeHtml(l.name)}</button>`).join("");
+  document.querySelectorAll("[data-setup-poi]").forEach(button => button.addEventListener("click", () => {
+    $("drop-location").value = button.dataset.setupPoi;
+    document.querySelectorAll("[data-setup-poi]").forEach(poi => poi.classList.toggle("selected", poi.dataset.setupPoi === button.dataset.setupPoi));
+  }));
+  $("drop-location").addEventListener("change", () => document.querySelectorAll("[data-setup-poi]").forEach(poi => poi.classList.toggle("selected", poi.dataset.setupPoi === $("drop-location").value)));
 }
 function startMatch() {
   const ratings = [...document.querySelectorAll("[data-rating]")].map(input => Math.max(0, Math.min(100, Number(input.value) || 0)));
