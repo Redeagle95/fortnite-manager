@@ -221,6 +221,67 @@ function moveTeam(match: BattleMatch, location: MapLocation): void {
   match.userTeam.position = { x: location.x, y: location.y };
   event(match, "ROTATE", "Rotation effectuée", `Ton équipe se déplace vers ${location.name}.`);
 }
+
+/** Simulates one world tick: enemy squads rotate and can meet/fight without player input. */
+function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
+  const enemies = match.teams.filter(team => !team.isUser && team.alive);
+  const mapWidth = match.map.width;
+  const mapHeight = match.map.height;
+
+  // Enemy teams progressively rotate toward the active storm instead of staying on their drop POI.
+  for (const team of enemies) {
+    const dx = match.storm.x - team.position.x;
+    const dy = match.storm.y - team.position.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const step = random.nextInt(180, 520);
+    const driftX = random.nextInt(-170, 170);
+    const driftY = random.nextInt(-170, 170);
+    team.position = {
+      x: Math.max(120, Math.min(mapWidth - 120, team.position.x + dx / distance * step + driftX)),
+      y: Math.max(120, Math.min(mapHeight - 120, team.position.y + dy / distance * step + driftY)),
+    };
+  }
+
+  // Resolve at most one encounter per team in this tick. Each death gets its own feed entry.
+  const engaged = new Set<string>();
+  for (const team of enemies) {
+    if (engaged.has(team.id) || !team.alive) continue;
+    const opponents = enemies
+      .filter(other => other.id !== team.id && other.alive && !engaged.has(other.id))
+      .map(other => ({ other, distance: Math.hypot(other.position.x - team.position.x, other.position.y - team.position.y) }))
+      .filter(entry => entry.distance < 1050)
+      .sort((a, b) => a.distance - b.distance);
+    const encounter = opponents[0];
+    if (!encounter || random.next() > 0.34) continue;
+
+    const rival = encounter.other;
+    engaged.add(team.id);
+    engaged.add(rival.id);
+    const winner = random.next() * 100 < clamp(50 + (teamPower(team) - teamPower(rival)) * 0.65, 12, 88) ? team : rival;
+    const loser = winner.id === team.id ? rival : team;
+    const victim = alivePlayers(loser)[random.nextInt(0, alivePlayers(loser).length - 1)];
+    const killer = alivePlayers(winner)[random.nextInt(0, alivePlayers(winner).length - 1)];
+    if (!victim || !killer) continue;
+
+    eliminatePlayer(victim);
+    winner.eliminations += 1;
+    event(match, "ELIMINATION", "Élimination", `${killer.name} (${winner.name}) élimine ${victim.name} (${loser.name}).`);
+
+    // A losing squad can suffer a second elimination in a longer exchange.
+    if (alivePlayers(loser).length > 0 && random.next() < 0.22) {
+      const secondVictim = alivePlayers(loser)[0];
+      const secondKiller = alivePlayers(winner)[0] ?? killer;
+      eliminatePlayer(secondVictim);
+      winner.eliminations += 1;
+      event(match, "ELIMINATION", "Élimination", `${secondKiller.name} (${winner.name}) élimine ${secondVictim.name} (${loser.name}).`);
+    }
+
+    if (alivePlayers(loser).length === 0) {
+      loser.alive = false;
+      event(match, "INFO", "Équipe éliminée", `${loser.name} quitte la partie.`);
+    }
+  }
+}
 function processAction(match: BattleMatch, action: BattleAction, random: SeededRandom): void {
   const location = match.map.locations.find(l => l.id === match.currentLocationId)!;
   switch (action.type) {
@@ -357,6 +418,7 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
   match.phaseIndex = 1;
   match.secondsUntilShrink = match.phases[0].waitSeconds;
   match.secondsIntoShrink = 0;
+  simulateWorldTick(match, random);
   updateCounts(match);
   return match;
 }
@@ -365,6 +427,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!match.userTeam.alive) { updateCounts(match); return match; }
   const random = new SeededRandom(match.seed + 1000 + match.phaseIndex * 97 + match.events.length * 13);
   processAction(match, action, random);
+  if (!isFinished(match)) simulateWorldTick(match, random);
   if (isFinished(match)) return match;
   match.stage = "ZONE";
   if (match.phaseIndex >= 4) {
