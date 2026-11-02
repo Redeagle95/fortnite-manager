@@ -4,3 +4,22 @@
 @media(max-width:900px){.game-layout{grid-template-columns:1fr}.battle-map{height:440px}.side-panel{grid-template-columns:1fr 1fr}.decision-card{grid-column:1/-1}.game-heading{align-items:start;gap:15px;flex-direction:column}.bottom-grid{grid-template-columns:1fr}.setup-grid{grid-template-columns:1fr}.ratings-head{align-items:start;flex-direction:column}}@media(max-width:560px){.shell{padding:20px 12px}.setup-panel{padding:22px;margin:20px auto}.setup-panel h1{font-size:42px}.side-panel{grid-template-columns:1fr}.decision-card{grid-column:auto}.battle-map{height:350px}.poi{font-size:7px;padding:5px}.match-stats{gap:14px}.ratings-fields{flex-wrap:wrap}.topbar{padding:0 15px}}
 
 .setup-map-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0c1e2c;margin:10px 0 22px}.setup-map{height:255px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 20% 25%,#17465b 0,#0d3045 44%,#0b2437 100%)}.setup-island{position:absolute;inset:4% 5%;background:linear-gradient(140deg,#8aa66d,#597c54 35%,#8d9a60 62%,#9a9465);clip-path:polygon(9% 13%,22% 4%,35% 9%,44% 2%,59% 10%,70% 5%,86% 18%,95% 34%,91% 51%,98% 66%,83% 85%,67% 90%,54% 98%,38% 91%,25% 97%,12% 80%,5% 62%,1% 43%)}.setup-poi{position:absolute;transform:translate(-50%,-50%);border:1px solid #eaf5ff99;background:#14263be8;color:white;border-radius:6px;padding:6px 8px;font-size:9px;font-weight:800;white-space:nowrap;cursor:pointer}.setup-poi:before{content:"";display:inline-block;width:6px;height:6px;background:#ffd36a;border-radius:50%;margin-right:5px}.setup-poi.selected{border:2px solid var(--cyan);background:#14527a;box-shadow:0 0 12px #48a7ff88}.map-hint{color:var(--muted);font-size:10px;margin:0;padding:0 14px 13px}
+
+/* Tactical decisions, fight odds and illustrated equipment */
+.fight-odds{display:grid;justify-items:center;min-width:70px;color:var(--gold)}
+.fight-odds b{font-family:'Barlow Condensed';font-size:25px;line-height:1}
+.fight-odds small{font-size:8px;color:#b9c9db;text-align:center;margin-top:4px}
+.odds-track{display:block;height:5px;background:#27374d;border-radius:8px;overflow:hidden;margin:8px 0 5px;max-width:230px}
+.odds-track i{display:block;height:100%;background:linear-gradient(90deg,#e56d72,#f3c66c,#53d69a);border-radius:8px}
+.equipment-icon{width:42px;height:42px;flex:0 0 42px;filter:drop-shadow(0 3px 5px #0007)}
+.gear-name{display:flex;align-items:center;gap:10px;min-width:0}
+.inventory-slot{align-items:center;min-height:58px}
+.inventory-slot .gear-name>span{line-height:1.3}
+.consumable-item{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #24344a}
+.consumable-item:last-child{border:0}
+.consumable-item .equipment-icon{width:34px;height:34px;flex-basis:34px}
+.consumable-item>span{font-size:10px;flex:1}
+.consumable-item small{font-size:8px}
+.health-fill.downed{background:var(--red)}
+.team-player:has(.health-fill.downed) .player-name{color:#ff9ca5}
+@media(max-width:560px){.equipment-icon{width:34px;height:34px;flex-basis:34px}.fight-odds{min-width:55px}}
