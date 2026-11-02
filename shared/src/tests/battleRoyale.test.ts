@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createBattleRoyale, getActionOptions, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
 
 describe("Battle Royale simulation", () => {
-  it("creates a 25-team match and offers spawn decisions", () => {
+  it("creates a full lobby and offers spawn decisions", () => {
     const match = createBattleRoyale(42, "TRIO", "tilted-district");
-    expect(match.teams).toHaveLength(25);
+    expect(match.teams).toHaveLength(33);
+    expect(match.playersRemaining).toBe(99);
     expect(match.userTeam.players).toHaveLength(3);
     expect(match.stage).toBe("DROP");
     expect(getActionOptions(match).map(a => a.type)).toEqual(["FIGHT", "LOOT", "ROTATE"]);
