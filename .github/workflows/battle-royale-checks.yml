@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/battle-royale-gameplay
+      - feat/battle-royale-tactical-actions
   pull_request:
     branches:
       - main

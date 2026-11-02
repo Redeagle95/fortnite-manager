@@ -3,7 +3,7 @@ export type Rarity = "COMMON" | "UNCOMMON" | "RARE" | "EPIC" | "LEGENDARY" | "MY
 export type WeaponCategory = "ASSAULT_RIFLE" | "SHOTGUN" | "SNIPER" | "SMG" | "PISTOL";
 export type Material = "WOOD" | "STONE" | "METAL";
 export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
-export type ActionType = "FIGHT" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION";
+export type ActionType = "FIGHT" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE";
 
 export interface PlayerSkill {
   aim: number; building: number; gameSense: number; positioning: number;
@@ -67,7 +67,8 @@ export type BattleAction =
   | { type: "REFRESH"; material?: Material }
   | { type: "ROTATE"; locationId?: string }
   | { type: "HEAL"; playerId?: string; itemDefinitionId?: string }
-  | { type: "HOLD_POSITION" };
+  | { type: "HOLD_POSITION" }
+  | { type: "REVIVE"; playerId?: string };
 export interface FightReport {
   winProbability: number; won: boolean; enemyTeamName: string;
   enemyEliminations: number; allyLosses: number; summary: string;

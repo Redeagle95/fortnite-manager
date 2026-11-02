@@ -71,25 +71,77 @@ function renderMap(match) {
   }));
   $("zone-label").textContent = match.stage === "FINISHED" ? "PARTIE TERMINÉE" : `ZONE ${Math.min(match.phaseIndex + 1, match.phases.length)} · RAYON ${Math.round(storm.radius)}`;
 }
+function estimateTeamPower(team) {
+  const players = team.players.filter(p => p.alive && !p.knocked);
+  if (!players.length) return 0;
+  const skill = players.reduce((sum, p) => sum + (p.skills.overall * .25 + p.skills.aim * .18 + p.skills.building * .18 + p.skills.gameSense * .16 + p.skills.positioning * .12 + p.skills.teamwork * .11), 0) / players.length;
+  const weapon = team.inventory.weapons.length ? team.inventory.weapons.reduce((sum, w) => sum + w.damage, 0) / team.inventory.weapons.length / 1.2 : 15;
+  const gear = Math.max(10, Math.min(100, weapon));
+  const health = players.reduce((sum, p) => sum + p.health + p.shield * .6, 0) / players.length / 2;
+  const buildBonus = Math.min(12, team.builds * 1.5) + Math.min(10, (team.resources.wood + team.resources.stone + team.resources.metal) / 100);
+  return skill * .65 + gear * .2 + health * .1 + buildBonus * .05;
+}
+function fightPreview(match) {
+  const enemies = match.teams.filter(t => !t.isUser && t.alive);
+  if (!enemies.length) return { chance: 100, enemy: "Aucun adversaire" };
+  const sameSpot = enemies.filter(t => t.dropLocationId === match.currentLocationId);
+  const pool = sameSpot.length ? sameSpot : enemies;
+  pool.sort((a,b) => Math.hypot(a.position.x-match.userTeam.position.x,a.position.y-match.userTeam.position.y)-Math.hypot(b.position.x-match.userTeam.position.x,b.position.y-match.userTeam.position.y));
+  const enemy = pool[0];
+  const positioning = match.userTeam.position.y < 5000 ? 4 : 0;
+  const builds = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
+  const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam) - estimateTeamPower(enemy)) * .72 + positioning + builds));
+  return { chance: Math.round(chance), enemy: enemy.name };
+}
+function actionsForLocation(match) {
+  const location = match.map.locations.find(l => l.id === match.currentLocationId);
+  const tags = location ? location.tags.join(" ").toLowerCase() : "";
+  let actions = [...zoneActions];
+  if (tags.includes("forêt") || tags.includes("ferme") || tags.includes("calme")) actions = actions.filter(a => ["REFRESH","LOOT","ROTATE","HEAL","HOLD_POSITION"].includes(a.type));
+  else if (tags.includes("hauteur") || tags.includes("montagne") || tags.includes("position")) actions = actions.filter(a => ["HOLD_POSITION","FIGHT","ROTATE","HEAL","LOOT"].includes(a.type));
+  else if (tags.includes("ville") || tags.includes("hot drop") || tags.includes("port")) actions = actions.filter(a => ["FIGHT","LOOT","ROTATE","HEAL","REFRESH"].includes(a.type));
+  else if (tags.includes("industriel") || tags.includes("métal")) actions = actions.filter(a => ["REFRESH","LOOT","FIGHT","ROTATE","HEAL","HOLD_POSITION"].includes(a.type));
+  if (match.userTeam.players.some(p => p.alive && p.knocked) && match.userTeam.players.some(p => p.alive && !p.knocked)) {
+    actions.unshift({ type: "REVIVE", label: "Réanimer un équipier", description: "Un mate est à terre : le relever avec 30 PV.", risk: "MEDIUM" });
+  }
+  return actions;
+}
+
 function renderActions(match) {
-  const actions = match.stage === "DROP" ? spawnActions : zoneActions;
-  $("decision-title").textContent = match.stage === "DROP" ? "Tu viens d'atterrir. Que fais-tu ?" : match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : `Phase ${match.phaseIndex + 1} · Quelle décision ?`;
-  $("decision-description").textContent = match.stage === "DROP" ? "Les adversaires présents sur ton spot peuvent contester ton loot." : match.stage === "FINISHED" ? `Classement final : #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s).` : "Chaque action influence ton équipement, ta position et tes chances de survie.";
+  const actions = match.stage === "DROP" ? spawnActions : actionsForLocation(match);
+  $("decision-title").textContent = match.stage === "DROP" ? "Tu viens d'atterrir. Que fais-tu ?" : match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : `Phase ${match.phaseIndex + 1} · ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
+  $("decision-description").textContent = match.stage === "DROP" ? "Les adversaires présents sur ton spot peuvent contester ton loot." : match.stage === "FINISHED" ? `Classement final : #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s).` : "Les choix proposés s’adaptent au lieu où se trouve ton équipe.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
-  $("action-list").innerHTML = actions.map(a => `<button class="action-button" data-action="${a.type}"><span><b>${a.label}</b><small>${a.description}</small></span><span class="risk ${a.risk}">${riskLabels[a.risk]}</span></button>`).join("");
+  const preview = fightPreview(match);
+  $("action-list").innerHTML = actions.map(a => {
+    const badge = a.type === "FIGHT"
+      ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>'
+      : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
+    const details = a.type === "FIGHT"
+      ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire estimé : ' + escapeHtml(preview.enemy) + '</small>'
+      : '';
+    return '<button class="action-button" data-action="' + a.type + '"><span><b>' + a.label + '</b><small>' + a.description + '</small>' + details + '</span>' + badge + '</button>';
+  }).join("");
   document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => match.stage === "DROP" ? sendSpawnAction(button.dataset.action) : sendZoneAction(button.dataset.action)));
   $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" ? false : !actions.some(a => a.type === "ROTATE"));
 }
+function equipmentIcon(id) {
+  const safeId = /^[a-z0-9-]+$/.test(id || "") ? id : "ammo";
+  return '<svg class="equipment-icon" viewBox="0 0 64 64" aria-hidden="true"><use href="/assets/equipment.svg#' + safeId + '"></use></svg>';
+}
 function renderTeam(team) {
-  $("team-list").innerHTML = team.players.map(player => `<div class="team-player"><div><div class="player-name">${escapeHtml(player.name)} ${player.alive ? "" : "· ÉLIMINÉ"}</div><div class="health-line"><div class="health-fill" style="width:${player.health}%"></div></div></div><div class="player-rating">${player.skills.overall}</div></div>`).join("");
+  $("team-list").innerHTML = team.players.map(player => {
+    const status = !player.alive ? "· ÉLIMINÉ" : player.knocked ? "· À TERRE" : "";
+    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
+  }).join("");
   $("wood").textContent = team.resources.wood;
   $("stone").textContent = team.resources.stone;
   $("metal").textContent = team.resources.metal;
   $("inventory-list").innerHTML = Array.from({ length: 5 }, (_, i) => {
     const weapon = team.inventory.weapons[i];
-    return `<div class="inventory-slot"><span>${weapon ? escapeHtml(weapon.name) : "Slot vide"}</span><b class="${weapon ? "rarity-" + weapon.rarity : ""}">${weapon ? weapon.rarity : "—"}</b></div>`;
+    return '<div class="inventory-slot"><span class="gear-name">' + (weapon ? equipmentIcon(weapon.definitionId) : equipmentIcon("empty-slot")) + '<span>' + (weapon ? escapeHtml(weapon.name) : "Slot vide") + '</span></span><b class="' + (weapon ? "rarity-" + weapon.rarity : "") + '">' + (weapon ? weapon.rarity : "—") + '</b></div>';
   }).join("");
-  $("consumables-list").textContent = team.inventory.items.length ? team.inventory.items.map(item => `${item.name} ×${item.quantity}`).join(" · ") : "Aucun consommable";
+  $("consumables-list").innerHTML = team.inventory.items.length ? team.inventory.items.map(item => '<div class="consumable-item">' + equipmentIcon(item.definitionId) + '<span>' + escapeHtml(item.name) + ' <b>×' + item.quantity + '</b></span><small class="rarity-' + item.rarity + '">' + item.rarity + '</small></div>').join("") : "Aucun consommable";
 }
 function renderEvents(events) {
   $("event-log").innerHTML = events.slice(0, 8).map(item => `<div class="event-row"><b>${escapeHtml(item.title)}</b><p>${escapeHtml(item.description)}</p></div>`).join("");
