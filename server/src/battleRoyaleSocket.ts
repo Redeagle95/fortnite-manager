@@ -58,7 +58,7 @@ export function registerBattleRoyaleSocket(io: Server): void {
         const match = matches.get(String(payload.matchId ?? ""));
         if (!match) throw new Error("Partie introuvable.");
         const action = payload.action;
-        if (!actions.includes(String(action.type))) throw new Error("Action inconnue.");
+        if (!actions.includes(String(action.type) as typeof actions[number])) throw new Error("Action inconnue.");
         takeZoneAction(match, action as unknown as BattleAction);
         io.to(match.id).emit("battle:state", match);
       } catch (error) {
