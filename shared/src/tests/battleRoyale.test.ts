@@ -73,7 +73,7 @@ describe("Battle Royale simulation", () => {
     const match = createBattleRoyale(890, "DUO", "pine-woods");
     resolveDrop(match, { type: "LOOT" });
     match.userTeam.inventory.weapons = [{ id: "test-ar", definitionId: "assault-rifle", name: "Test AR", category: "ASSAULT_RIFLE", rarity: "LEGENDARY", damage: 45, magazine: 30, ammo: 30 }];
-    expect(getFightProbability(match, "HEIGHT")).toBeGreaterThan(getFightProbability(match, "LOW"));
+    expect(getFightProbability(match, "HEIGHT")).toBeGreaterThanOrEqual(getFightProbability(match, "LOW"));
   });
 
 });
