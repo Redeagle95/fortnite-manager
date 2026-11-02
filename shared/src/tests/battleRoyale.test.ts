@@ -201,4 +201,18 @@ describe("Battle Royale simulation", () => {
     expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(false);
   });
 
+  it("reboots one eliminated teammate using a limited team token", () => {
+    const match = createBattleRoyale(9106, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const target = match.userTeam.players[1];
+    target.alive = false;
+    target.health = 0;
+    expect(match.userTeam.rebootTokens).toBe(1);
+    takeZoneAction(match, {type:"REBOOT",playerId:target.id});
+    expect(target.alive).toBe(true);
+    expect(target.health).toBe(100);
+    expect(target.rebooted).toBe(true);
+    expect(match.userTeam.rebootTokens).toBe(0);
+  });
+
 });
