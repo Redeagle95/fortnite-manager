@@ -250,8 +250,13 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
   if (match.stage !== "DROP") throw new Error("Le choix de spawn a déjà été effectué.");
   const random = new SeededRandom(match.seed + 101);
   match.stage = "LOOT";
-  if (action.type === "FIGHT") fight(match, random);
-  else if (action.type === "ROTATE") {
+  if (action.type === "FIGHT") {
+    const spawnDrops = makeDrop(match, match.map.locations.find(l => l.id === match.currentLocationId)!, random);
+    const spawnLoot = collectLoot(match.userTeam, spawnDrops);
+    match.lootOnGround.push(...spawnLoot.remaining);
+    event(match, "LOOT", "Loot de spawn", `${spawnLoot.collected.length} objet(s) récupéré(s) avant le combat.`);
+    fight(match, random);
+  } else if (action.type === "ROTATE") {
     const target = nearestLocation(match, random); moveTeam(match, target);
     const drops = makeDrop(match, target, random); const collected = collectLoot(match.userTeam, drops);
     match.lootOnGround.push(...collected.remaining);
@@ -273,7 +278,6 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   processAction(match, action, random);
   if (match.stage === "FINISHED") return match;
   match.stage = "ZONE";
-  match.phaseIndex += 1;
   if (match.phaseIndex >= match.phases.length) {
     const lastEnemy = match.teams.find(t => !t.isUser && t.alive);
     if (lastEnemy) {
@@ -290,7 +294,18 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   match.secondsUntilShrink = next.waitSeconds;
   match.secondsIntoShrink = 0;
   applyStormDamage(match);
+  match.phaseIndex += 1;
   updateCounts(match);
+  if (match.phaseIndex >= match.phases.length && match.stage !== "FINISHED") {
+    const lastEnemy = match.teams.find(t => !t.isUser && t.alive);
+    if (lastEnemy && match.userTeam.alive) {
+      const report = fight(match, random);
+      if (!report.won) { match.userTeam.alive = false; for (const p of alivePlayers(match.userTeam)) eliminatePlayer(p); }
+      else { for (const p of alivePlayers(lastEnemy)) eliminatePlayer(p); lastEnemy.alive = false; }
+    }
+    updateCounts(match);
+    if (match.stage !== "FINISHED") finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+  }
   return match;
 }
 export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> {
