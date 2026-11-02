@@ -43,3 +43,8 @@
 @media(max-width:900px){.bottom-grid{grid-template-columns:1fr}}
 
 .team-marker{transition:left .9s ease,top .9s ease}
+
+.surge-info{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.surge-track{height:8px;background:#29374a;border-radius:8px;overflow:hidden;margin:8px 0}
+.surge-track i{display:block;height:100%;background:linear-gradient(90deg,#e5a44f,#56d7a1);transition:width .4s ease}
+.surge-danger{color:#ff8994!important}

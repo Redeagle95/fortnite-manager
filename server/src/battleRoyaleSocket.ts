@@ -1,5 +1,6 @@
 import type { Server } from "socket.io";
 import {
+  advanceMatchTime,
   createBattleRoyale,
   resolveDrop,
   takeZoneAction,
@@ -8,13 +9,22 @@ import type { BattleAction, BattleMatch, BattleMode } from "../../shared/src/bat
 
 const matches = new Map<string, BattleMatch>();
 const modes: BattleMode[] = ["SOLO", "DUO", "TRIO", "SQUAD"];
-const actions = ["FIGHT", "FIGHT_THEN_ROTATE", "FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE"] as const;
+const actions = ["FARM_FULL", "FARM_HALF_ROTATE", "FARM_SURGE", "FIGHT", "FIGHT_THEN_ROTATE", "FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
 export function registerBattleRoyaleSocket(io: Server): void {
+  // One server-side clock drives enemy rotations, fights, storm shrink and surge pulses.
+  setInterval(() => {
+    for (const match of matches.values()) {
+      if (match.stage !== "LOOT" && match.stage !== "ZONE") continue;
+      advanceMatchTime(match, 5);
+      io.to(match.id).emit("battle:state", match);
+    }
+  }, 1000);
+
   io.on("connection", (socket) => {
     socket.on("battle:create", (payload: unknown) => {
       try {

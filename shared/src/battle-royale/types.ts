@@ -4,7 +4,7 @@ export type WeaponCategory = "ASSAULT_RIFLE" | "SHOTGUN" | "SNIPER" | "SMG" | "P
 export type Material = "WOOD" | "STONE" | "METAL";
 export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
 export type TacticalStyle = "HEIGHT" | "MID" | "LOW" | "OUTSIDE";
-export type ActionType = "FIGHT" | "FIGHT_THEN_ROTATE" | "FIGHT_HEIGHT" | "FIGHT_MID" | "FIGHT_LOW" | "FIGHT_OUTSIDE" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE";
+export type ActionType = "FARM_FULL" | "FARM_HALF_ROTATE" | "FARM_SURGE" | "FIGHT" | "FIGHT_THEN_ROTATE" | "FIGHT_HEIGHT" | "FIGHT_MID" | "FIGHT_LOW" | "FIGHT_OUTSIDE" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE";
 
 export interface PlayerSkill {
   aim: number; building: number; gameSense: number; positioning: number;
@@ -31,7 +31,7 @@ export interface BattleTeam {
   id: string; name: string; isUser: boolean; players: BattlePlayer[];
   inventory: Inventory; resources: Resources; eliminations: number;
   placement: number | null; dropLocationId: string; alive: boolean;
-  position: { x: number; y: number }; builds: number;
+  position: { x: number; y: number }; builds: number; damageDealt: number;
 }
 export interface MapLocation {
   id: string; name: string; x: number; y: number; lootQuality: number;
@@ -49,20 +49,24 @@ export interface LootDrop {
   category?: WeaponCategory; damage?: number; material?: Material;
 }
 export interface BattleEvent {
-  id: string; phase: number; type: "DROP" | "LOOT" | "FIGHT" | "ROTATE" | "REFRESH" | "HEAL" | "STORM" | "ELIMINATION" | "INFO";
+  id: string; phase: number; type: "DROP" | "LOOT" | "FIGHT" | "ROTATE" | "REFRESH" | "FARM" | "SURGE" | "HEAL" | "STORM" | "ELIMINATION" | "INFO";
   title: string; description: string; createdAt: number;
 }
 export interface BattleMatch {
   id: string; seed: number; mode: BattleMode; stage: MatchStage;
   map: { name: string; width: number; height: number; locations: MapLocation[] };
   userTeam: BattleTeam; teams: BattleTeam[]; selectedDropId: string;
-  currentLocationId: string; storm: StormCircle; phases: ZonePhase[];
+  currentLocationId: string; storm: StormCircle; stormTarget: StormCircle; phases: ZonePhase[];
   phaseIndex: number; secondsUntilShrink: number; secondsIntoShrink: number;
+  gameTimeSeconds: number; stormDamageTaken: number; surgeDamageTaken: number; surgeThreshold: number; stormSurgeActive: boolean; lastSurgePulse: number;
   lootOnGround: LootDrop[]; events: BattleEvent[]; teamsRemaining: number;
   playersRemaining: number; startedAt: number; finishedAt: number | null;
   finalPlacement: number | null; result: "WIN" | "ELIMINATED" | null;
 }
 export type BattleAction =
+  | { type: "FARM_FULL" }
+  | { type: "FARM_HALF_ROTATE"; locationId?: string }
+  | { type: "FARM_SURGE" }
   | { type: "FIGHT"; style?: TacticalStyle }
   | { type: "FIGHT_THEN_ROTATE"; locationId?: string }
   | { type: "FIGHT_HEIGHT" }

@@ -31,7 +31,7 @@ function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch
     id: `${id}-p${i + 1}`, name: isUser ? (i === 0 ? "Toi" : `Mate ${i}`) : `${name} ${i + 1}`,
     skills: createSkills(random, playerRatings?.[i] ?? skillBase), alive: true, health: 100, shield: 0, knocked: false,
   }));
-  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0 };
+  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0, damageDealt: 0 };
 }
 function event(match: BattleMatch, type: BattleEvent["type"], title: string, description: string): BattleEvent {
   const item = { id: `event-${match.events.length + 1}`, phase: match.phaseIndex, type, title, description, createdAt: Date.now() };
@@ -154,6 +154,7 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
     event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
   }
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
+  match.userTeam.damageDealt += enemyEliminations * 100 + (won ? 80 : 35);
   for (let i = 0; i < allyLosses; i++) {
     const downed = allies[allies.length - 1 - i];
     downed.knocked = true; downed.health = 0; downed.shield = 0;
@@ -184,6 +185,54 @@ function refresh(team: BattleTeam, location: MapLocation, random: SeededRandom, 
   team.builds += 1;
   return gained;
 }
+
+function farmToTarget(team: BattleTeam, target: number): number {
+  let gained = 0;
+  for (const material of ["wood", "stone", "metal"] as const) {
+    const amount = Math.max(0, Math.min(500, target) - team.resources[material]);
+    team.resources[material] += amount;
+    gained += amount;
+  }
+  team.builds += Math.ceil(gained / 150);
+  return gained;
+}
+
+function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
+  const enemy = findEnemy(match);
+  if (!enemy) {
+    event(match, "SURGE", "Aucun angle de tir", "Aucune équipe adverse n'est à portée : impossible de prendre des tags de surge.");
+    return 0;
+  }
+  const active = activePlayers(match.userTeam);
+  const aim = active.reduce((sum, player) => sum + player.skills.aim, 0) / Math.max(1, active.length);
+  const weaponDamage = match.userTeam.inventory.weapons.reduce((sum, weapon) => sum + weapon.damage, 0) / Math.max(1, match.userTeam.inventory.weapons.length);
+  let remaining = Math.round(Math.max(35, active.length * (25 + aim * 0.25 + weaponDamage * 0.18) + random.nextInt(0, 25)));
+  let inflicted = 0;
+  for (const target of activePlayers(enemy)) {
+    if (remaining <= 0) break;
+    const shieldDamage = Math.min(target.shield, remaining);
+    target.shield -= shieldDamage;
+    remaining -= shieldDamage;
+    let actual = shieldDamage;
+    const healthDamage = Math.min(target.health, remaining);
+    target.health -= healthDamage;
+    remaining -= healthDamage;
+    actual += healthDamage;
+    inflicted += actual;
+    if (target.health <= 0) {
+      eliminatePlayer(target);
+      event(match, "ELIMINATION", "Élimination", `Ton équipe élimine ${target.name} (${enemy.name}) après un tag de surge.`);
+      match.userTeam.eliminations += 1;
+    }
+  }
+  match.userTeam.damageDealt += inflicted;
+  if (!alivePlayers(enemy).length) {
+    enemy.alive = false;
+    event(match, "INFO", "Équipe éliminée", `${enemy.name} est entièrement éliminée après les tags.`);
+  }
+  event(match, "SURGE", "Tags de surge", `Ton équipe inflige réellement ${inflicted} dégâts à ${enemy.name}. Progression : ${match.userTeam.damageDealt}/${match.surgeThreshold}.`);
+  return inflicted;
+}
 function reviveTeam(team: BattleTeam, playerId?: string): string {
   if (!activePlayers(team).length) return "Il faut au moins un équipier actif pour réanimer un mate.";
   const target = team.players.find(player => player.id === playerId && player.alive && player.knocked)
@@ -211,19 +260,75 @@ function nearestLocation(match: BattleMatch, random: SeededRandom): MapLocation 
   const candidates = match.map.locations.filter(l => l.id !== match.currentLocationId);
   return candidates.sort((a, b) => Math.hypot(a.x - match.userTeam.position.x, a.y - match.userTeam.position.y) - Math.hypot(b.x - match.userTeam.position.x, b.y - match.userTeam.position.y))[random.nextInt(0, Math.min(1, candidates.length - 1))];
 }
-function applyStormDamage(match: BattleMatch): void {
-  const phase = match.phases[Math.min(match.phaseIndex, match.phases.length - 1)];
-  if (isInsideStorm(match.userTeam.position.x, match.userTeam.position.y, match.storm)) return;
-  const seconds = phase.shrinkSeconds + phase.waitSeconds;
-  const damage = phase.damagePerSecond * Math.min(seconds, 30);
-  for (const player of alivePlayers(match.userTeam)) {
-    let remaining = damage;
-    const shieldDamage = Math.min(player.shield, remaining); player.shield -= shieldDamage; remaining -= shieldDamage;
-    player.health = Math.max(0, player.health - remaining);
-    if (player.health <= 0) eliminatePlayer(player);
+function damageTeam(team: BattleTeam, damage: number, match: BattleMatch, reason: "storm" | "surge"): void {
+  const targets = activePlayers(team);
+  if (!targets.length) return;
+  const target = targets[0];
+  let remaining = damage;
+  const shieldDamage = Math.min(target.shield, remaining);
+  target.shield -= shieldDamage;
+  remaining -= shieldDamage;
+  target.health = Math.max(0, target.health - remaining);
+  if (reason === "storm" && team.isUser) match.stormDamageTaken += damage;
+  if (reason === "surge" && team.isUser) match.surgeDamageTaken += damage;
+  if (target.health <= 0) {
+    eliminatePlayer(target);
+    event(match, "ELIMINATION", "Élimination par " + (reason === "storm" ? "la tempête" : "la storm surge"), `${target.name} (${team.name}) est éliminé par ${reason === "storm" ? "la tempête" : "la storm surge"}.`);
   }
-  if (!alivePlayers(match.userTeam).length) match.userTeam.alive = false;
-  event(match, "STORM", "Dégâts de tempête", `Ton équipe subit ${damage} dégâts car elle est hors zone.`);
+  if (!alivePlayers(team).length) {
+    team.alive = false;
+    event(match, "INFO", "Équipe éliminée", `${team.name} est entièrement éliminée.`);
+  }
+}
+
+function applyStormDamage(match: BattleMatch, seconds = 1): void {
+  const phase = match.phases[Math.max(0, Math.min(match.phaseIndex - 1, match.phases.length - 1))];
+  for (const team of match.teams.filter(candidate => candidate.alive)) {
+    if (!isInsideStorm(team.position.x, team.position.y, match.storm)) damageTeam(team, phase.damagePerSecond * seconds, match, "storm");
+  }
+}
+
+function updateStormCircle(match: BattleMatch): void {
+  const phase = match.phases[Math.max(0, Math.min(match.phaseIndex - 1, match.phases.length - 1))];
+  if (match.secondsUntilShrink > 0) { match.secondsUntilShrink -= 1; return; }
+  if (match.secondsIntoShrink >= phase.shrinkSeconds) return;
+  match.secondsIntoShrink += 1;
+  const remaining = Math.max(1, phase.shrinkSeconds - match.secondsIntoShrink + 1);
+  match.storm.x += (match.stormTarget.x - match.storm.x) / remaining;
+  match.storm.y += (match.stormTarget.y - match.storm.y) / remaining;
+  match.storm.radius += (match.stormTarget.radius - match.storm.radius) / remaining;
+  if (match.secondsIntoShrink >= phase.shrinkSeconds) match.storm = { ...match.stormTarget };
+}
+
+function updateSurge(match: BattleMatch): void {
+  const activeCount = activePlayers(match.userTeam).length;
+  match.surgeThreshold = Math.max(100, activeCount * 100);
+  match.stormSurgeActive = match.phaseIndex >= 3 && match.userTeam.damageDealt < match.surgeThreshold;
+  if (match.phaseIndex < 3 || !match.stormSurgeActive || match.gameTimeSeconds - match.lastSurgePulse < 5) return;
+  match.lastSurgePulse = match.gameTimeSeconds;
+  for (const team of match.teams.filter(candidate => candidate.alive && candidate.damageDealt < Math.max(100, activePlayers(candidate).length * 100))) {
+    if (!activePlayers(team).length) continue;
+    damageTeam(team, 25, match, "surge");
+    if (team.isUser) event(match, "SURGE", "Storm surge active", `Seuil non atteint : ${team.damageDealt}/${match.surgeThreshold}. Ton équipe subit 25 dégâts de surge.`);
+  }
+}
+
+export function advanceMatchTime(match: BattleMatch, gameSeconds = 5): BattleMatch {
+  if (match.stage !== "LOOT" && match.stage !== "ZONE") return match;
+  const safeSeconds = Math.max(1, Math.min(300, Math.floor(gameSeconds)));
+  for (let second = 0; second < safeSeconds; second++) {
+    match.gameTimeSeconds += 1;
+    updateStormCircle(match);
+    applyStormDamage(match, 1);
+    updateSurge(match);
+    if (match.gameTimeSeconds % 15 === 0) {
+      const random = new SeededRandom(match.seed + match.gameTimeSeconds * 31 + match.events.length * 7);
+      simulateWorldTick(match, random, 0.025);
+    }
+    updateCounts(match);
+    if (match.finishedAt !== null) break;
+  }
+  return match;
 }
 function moveTeam(match: BattleMatch, location: MapLocation): void {
   match.currentLocationId = location.id;
@@ -232,7 +337,7 @@ function moveTeam(match: BattleMatch, location: MapLocation): void {
 }
 
 /** Simulates one world tick: enemy squads rotate and can meet/fight without player input. */
-function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
+function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterChance = 0.34): void {
   const enemies = match.teams.filter(team => !team.isUser && team.alive);
   const mapWidth = match.map.width;
   const mapHeight = match.map.height;
@@ -261,7 +366,7 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
       .filter(entry => entry.distance < 1050)
       .sort((a, b) => a.distance - b.distance);
     const encounter = opponents[0];
-    if (!encounter || random.next() > 0.34) continue;
+    if (!encounter || random.next() > encounterChance) continue;
 
     const rival = encounter.other;
     engaged.add(team.id);
@@ -274,6 +379,7 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
 
     eliminatePlayer(victim);
     winner.eliminations += 1;
+    winner.damageDealt += random.nextInt(90, 180);
     event(match, "ELIMINATION", "Élimination", `${killer.name} (${winner.name}) élimine ${victim.name} (${loser.name}).`);
 
     // A losing squad can suffer a second elimination in a longer exchange.
@@ -335,6 +441,22 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       event(match, "REFRESH", "Refresh matériaux", `+ ${gained} matériaux récoltés. Bois ${match.userTeam.resources.wood}, pierre ${match.userTeam.resources.stone}, métal ${match.userTeam.resources.metal}.`);
       break;
     }
+    case "FARM_FULL": {
+      const gained = farmToTarget(match.userTeam, 500);
+      event(match, "FARM", "Farm complet", `Récolte complète : +${gained} matériaux. Bois ${match.userTeam.resources.wood}/500, pierre ${match.userTeam.resources.stone}/500, métal ${match.userTeam.resources.metal}/500.`);
+      break;
+    }
+    case "FARM_HALF_ROTATE": {
+      const gained = farmToTarget(match.userTeam, 250);
+      const otherLocations = match.map.locations.filter(candidate => candidate.id !== match.currentLocationId);
+      const safeLocations = otherLocations.filter(candidate => isInsideStorm(candidate.x, candidate.y, match.stormTarget));
+      const destinationPool = safeLocations.length ? safeLocations : otherLocations;
+      const destination = destinationPool.sort((a, b) => Math.hypot(a.x - match.stormTarget.x, a.y - match.stormTarget.y) - Math.hypot(b.x - match.stormTarget.x, b.y - match.stormTarget.y))[0] ?? nearestLocation(match, random);
+      event(match, "FARM", "Farm à moitié", `Récolte intermédiaire : +${gained} matériaux, objectif 250 par type. Rotation anticipée vers ${destination.name}.`);
+      moveTeam(match, destination);
+      break;
+    }
+    case "FARM_SURGE": farmSurgeTags(match, random); break;
     case "ROTATE": {
       const destination = match.map.locations.find(l => l.id === action.locationId) ?? nearestLocation(match, random);
       moveTeam(match, destination);
@@ -391,12 +513,14 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
   const match: BattleMatch = {
     id: `br-${seed}`, seed, mode, stage: "DROP",
     map: BATTLE_ROYALE_MAP, userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
-    storm: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0,
+    storm: { x: 5000, y: 5000, radius: 5000 }, stormTarget: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0,
     secondsUntilShrink: ZONE_PHASES[0].waitSeconds, secondsIntoShrink: 0,
+    gameTimeSeconds: 0, stormDamageTaken: 0, surgeDamageTaken: 0, surgeThreshold: 150, stormSurgeActive: false, lastSurgePulse: 0,
     lootOnGround: [], events: [], teamsRemaining: teams.length, playersRemaining: teams.reduce((n,t) => n + t.players.length, 0),
     startedAt: Date.now(), finishedAt: null, finalPlacement: null, result: null,
   };
   event(match, "DROP", "Atterrissage confirmé", `Ton équipe atterrit à ${location.name}. ${teams.filter(t => !t.isUser && t.dropLocationId === location.id).length} équipe(s) ennemie(s) sont également présentes.`);
+  match.surgeThreshold = Math.max(100, activePlayers(userTeam).length * 100);
   return match;
 }
 export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { type: "FIGHT" | "LOOT" | "ROTATE" }>): BattleMatch {
@@ -423,7 +547,7 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
     const nearby = findEnemy(match);
     if (nearby && random.next() < 0.28) fight(match, random);
   }
-  match.storm = nextStormCircle(match.storm, match.phases[0].radius, random);
+  match.stormTarget = nextStormCircle(match.storm, match.phases[0].radius, random);
   match.phaseIndex = 1;
   match.secondsUntilShrink = match.phases[0].waitSeconds;
   match.secondsIntoShrink = 0;
@@ -456,11 +580,11 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
     return match;
   }
   const next = match.phases[match.phaseIndex];
-  match.storm = nextStormCircle(match.storm, next.radius, random);
+  match.stormTarget = nextStormCircle(match.stormTarget, next.radius, random);
   match.secondsUntilShrink = next.waitSeconds;
   match.secondsIntoShrink = 0;
-  applyStormDamage(match);
   match.phaseIndex += 1;
+  updateSurge(match);
   updateCounts(match);
   return match;
 }
@@ -471,14 +595,18 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
     { type: "ROTATE" as const, label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" as const },
   ] : match.phaseIndex === 1 ? [
     { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Comparer les notes, la vie, les boucliers et l'équipement des deux équipes.", risk: "HIGH" as const },
-    { type: "REFRESH" as const, label: "Farmer les matériaux", description: "Récolter bois, pierre et métal, avec un maximum de 500 chacun.", risk: "LOW" as const },
+    { type: "FARM_FULL" as const, label: "Farm complet · 500/500", description: "Récolter le maximum : 500 bois, 500 pierre et 500 métal.", risk: "LOW" as const },
+    { type: "FARM_HALF_ROTATE" as const, label: "Farm à moitié puis rotate", description: "Atteindre 250 de chaque matériau et partir plus tôt vers la zone.", risk: "LOW" as const },
+    { type: "FARM_SURGE" as const, label: "Prendre des tags pour la surge", description: "Infliger des dégâts à distance sans chercher l'élimination.", risk: "MEDIUM" as const },
   ] : match.phaseIndex === 2 ? [
     { type: "ROTATE" as const, label: "Lancer la rotation maintenant", description: "Rejoindre directement la prochaine zone avant la fermeture de la tempête.", risk: "LOW" as const },
     { type: "FIGHT_THEN_ROTATE" as const, label: "Prendre un fight puis rotate", description: "Tenter un engagement avant de rejoindre la prochaine zone.", risk: "HIGH" as const },
+    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Chercher des dégâts sur une équipe adverse pour atteindre le seuil de storm surge.", risk: "MEDIUM" as const },
   ] : match.phaseIndex === 3 ? [
     { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Évaluer la force et le stuff adverse avant l'engagement.", risk: "HIGH" as const },
     { type: "ROTATE" as const, label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête et rejoindre le prochain cercle.", risk: "MEDIUM" as const },
     { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources sans dépasser 500 par matériau.", risk: "LOW" as const },
+    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre des tags pour éviter les dégâts de storm surge si le seuil n'est pas atteint.", risk: "MEDIUM" as const },
   ] : [
     { type: "FIGHT_HEIGHT" as const, label: "Prendre la hauteur", description: "Meilleure synergie avec fusils d'assaut et snipers.", risk: "HIGH" as const },
     { type: "FIGHT_MID" as const, label: "Jouer au milieu", description: "Meilleure synergie avec les pompes et les armes polyvalentes.", risk: "HIGH" as const },

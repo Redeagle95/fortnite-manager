@@ -58,11 +58,11 @@ function renderMap(match) {
   const diameter = storm.radius * 2 / width * 100;
   const circleStyle = "width:" + diameter + "%;height:" + diameter + "%;left:" + (storm.x / width * 100 - diameter / 2) + "%;top:" + (storm.y / height * 100 - diameter / 2) + "%;";
   $("storm-circle").style.cssText = circleStyle;
-  const nextPhase = match.stage === "DROP" ? match.phases[0] : match.phases[match.phaseIndex];
   const nextCircle = $("next-storm-circle");
-  if (nextPhase && match.stage !== "FINISHED") {
-    const nextDiameter = nextPhase.radius * 2 / width * 100;
-    nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (storm.x / width * 100 - nextDiameter / 2) + "%;top:" + (storm.y / height * 100 - nextDiameter / 2) + "%;";
+  const target = match.stormTarget || storm;
+  if (match.stage !== "FINISHED") {
+    const nextDiameter = target.radius * 2 / width * 100;
+    nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (target.x / width * 100 - nextDiameter / 2) + "%;top:" + (target.y / height * 100 - nextDiameter / 2) + "%;";
     nextCircle.classList.remove("hidden");
   } else nextCircle.classList.add("hidden");
   const poiButtons = match.map.locations.map(location => {
@@ -126,10 +126,30 @@ function fightPreview(match, style) {
 }
 function actionsForZone(match) {
   let actions;
-  if (match.phaseIndex === 1) actions = [{type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer la force, la vie et le stuff des deux équipes.",risk:"HIGH"},{type:"REFRESH",label:"Farmer les matériaux",description:"Récolter bois, pierre et métal (500 maximum chacun).",risk:"LOW"}];
-  else if (match.phaseIndex === 2) actions = [{type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},{type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"}];
-  else if (match.phaseIndex === 3) actions = [{type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},{type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},{type:"REFRESH",label:"Refresh matériaux",description:"Compléter les ressources de l’équipe.",risk:"LOW"}];
-  else actions = [{type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},{type:"FIGHT_MID",label:"Jouer au milieu",description:"Synergie renforcée avec les pompes.",risk:"HIGH",style:"MID"},{type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},{type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}];
+  if (match.phaseIndex === 1) actions = [
+    {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer la force, la vie et le stuff des deux équipes.",risk:"HIGH"},
+    {type:"FARM_FULL",label:"Farm complet · 500/500",description:"Récolter directement 500 bois, 500 pierre et 500 métal.",risk:"LOW"},
+    {type:"FARM_HALF_ROTATE",label:"Farm à moitié puis rotate",description:"Atteindre 250 de chaque matériau puis partir plus tôt vers la zone.",risk:"LOW"},
+    {type:"FARM_SURGE",label:"Prendre des tags pour la surge",description:"Infliger des dégâts à distance sans chercher l'élimination.",risk:"MEDIUM"}
+  ];
+  else if (match.phaseIndex === 2) actions = [
+    {type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},
+    {type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"},
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags réels sur une équipe adverse pour atteindre le seuil de dégâts avant la storm surge.",risk:"MEDIUM"}
+  ];
+  else if (match.phaseIndex === 3) actions = [
+    {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},
+    {type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},
+    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter progressivement les ressources de l’équipe.",risk:"LOW"},
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants aux adversaires pour éviter les pulses de storm surge.",risk:"MEDIUM"}
+  ];
+  else actions = [
+    {type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},
+    {type:"FIGHT_MID",label:"Jouer au milieu",description:"Synergie renforcée avec les pompes.",risk:"HIGH",style:"MID"},
+    {type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},
+    {type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"},
+    {type:"FARM_SURGE",label:"Prendre les derniers tags",description:"Infliger les dégâts nécessaires si la storm surge est encore active.",risk:"MEDIUM"}
+  ];
   if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV. Au moins un joueur doit rester actif.",risk:"MEDIUM"});
   return actions;
 }
@@ -143,8 +163,10 @@ function renderActions(match) {
     const style = a.style || (a.type === "FIGHT_HEIGHT" ? "HEIGHT" : a.type === "FIGHT_MID" ? "MID" : a.type === "FIGHT_LOW" ? "LOW" : a.type === "FIGHT_OUTSIDE" ? "OUTSIDE" : undefined);
     const isFight = ["FIGHT","FIGHT_THEN_ROTATE","FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"].includes(a.type);
     const preview = isFight ? fightPreview(match, style) : null;
-    const badge = preview ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>' : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
-    const details = preview ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire : ' + escapeHtml(preview.enemy) + '</small>' : '';
+    const isSurge = a.type === "FARM_SURGE";
+    const surgeProgress = Math.min(100, Math.round((match.userTeam.damageDealt || 0) / Math.max(1, match.surgeThreshold || 1) * 100));
+    const badge = preview ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>' : isSurge ? '<span class="fight-odds"><b>' + surgeProgress + '%</b><small>seuil surge</small></span>' : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
+    const details = preview ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire : ' + escapeHtml(preview.enemy) + '</small>' : isSurge ? '<span class="odds-track"><i style="width:' + surgeProgress + '%"></i></span><small>Dégâts : ' + (match.userTeam.damageDealt || 0) + ' / ' + (match.surgeThreshold || 0) + '</small>' : '';
     return '<button class="action-button" data-action="' + a.type + '"><span><b>' + a.label + '</b><small>' + a.description + '</small>' + details + '</span>' + badge + '</button>';
   }).join("");
   document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => match.stage === "DROP" ? sendSpawnAction(button.dataset.action) : sendZoneAction(button.dataset.action)));
@@ -183,7 +205,7 @@ function renderMatch(match) {
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
   $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(5, match.phaseIndex + 1);
-  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
+  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
   $("phase-number").textContent = match.stage === "DROP" ? "1/5" : match.stage === "FINISHED" ? "FIN" : Math.min(5, match.phaseIndex + 1) + "/5";
@@ -193,6 +215,11 @@ function renderMatch(match) {
   renderEvents(match.events);
   const location = match.map.locations.find(l => l.id === match.currentLocationId);
   $("location-info").innerHTML = `<div class="location-stat"><span>Position actuelle</span><b>${escapeHtml(location.name)}</b></div><div class="location-stat"><span>Qualité du loot</span><b>${location.lootQuality}/100</b></div><div class="location-stat"><span>Danger local</span><b>${location.danger}/100</b></div><div class="location-stat"><span>Équipes restantes</span><b>${match.teamsRemaining}</b></div>`;
+  const surgePercent = Math.min(100, Math.round((match.userTeam.damageDealt || 0) / Math.max(1, match.surgeThreshold || 1) * 100));
+  const surgeStatus = match.stormSurgeActive ? "ACTIVE · dégâts toutes les 5 s" : match.phaseIndex >= 3 ? "SEUIL ATTEINT" : "PAS ENCORE ACTIVE";
+  const secondsLeft = Math.max(0, match.secondsUntilShrink || 0);
+  const activePhase = match.phases[Math.max(0, Math.min(match.phaseIndex - 1, match.phases.length - 1))];
+  $("surge-info").innerHTML = `<div class="location-stat"><span>Storm surge</span><b class="${match.stormSurgeActive ? "surge-danger" : ""}">${surgeStatus}</b></div><div class="surge-track"><i style="width:${surgePercent}%"></i></div><div class="location-stat"><span>Dégâts infligés / seuil</span><b>${match.userTeam.damageDealt || 0} / ${match.surgeThreshold || 0}</b></div><div class="location-stat"><span>DPS tempête hors zone</span><b>${activePhase.damagePerSecond} / seconde</b></div><div class="location-stat"><span>Pulse storm surge</span><b>25 dégâts / 5 s de jeu</b></div><div class="location-stat"><span>Horloge de simulation</span><b>5 s de jeu / 1 s réelle</b></div><div class="location-stat"><span>Dégâts tempête subis</span><b>${match.stormDamageTaken || 0}</b></div><div class="location-stat"><span>Dégâts surge subis</span><b>${match.surgeDamageTaken || 0}</b></div><div class="location-stat"><span>Avant fermeture (temps de jeu)</span><b>${secondsLeft > 0 ? secondsLeft + " s" : "Fermeture en cours"}</b></div>`;
 }
 socket.on("connect", () => { $("connection-dot").parentElement.classList.add("online"); $("connection-label").textContent = "Serveur connecté"; });
 socket.on("disconnect", () => { $("connection-dot").parentElement.classList.remove("online"); $("connection-label").textContent = "Déconnecté"; });
