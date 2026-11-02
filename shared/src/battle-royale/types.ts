@@ -58,7 +58,7 @@ export interface BattleMatch {
   userTeam: BattleTeam; teams: BattleTeam[]; selectedDropId: string;
   currentLocationId: string; storm: StormCircle; stormTarget: StormCircle; phases: ZonePhase[];
   phaseIndex: number; secondsUntilShrink: number; secondsIntoShrink: number;
-  gameTimeSeconds: number; stormDamageTaken: number; surgeThreshold: number; stormSurgeActive: boolean; lastSurgePulse: number;
+  gameTimeSeconds: number; stormDamageTaken: number; surgeDamageTaken: number; surgeThreshold: number; stormSurgeActive: boolean; lastSurgePulse: number;
   lootOnGround: LootDrop[]; events: BattleEvent[]; teamsRemaining: number;
   playersRemaining: number; startedAt: number; finishedAt: number | null;
   finalPlacement: number | null; result: "WIN" | "ELIMINATED" | null;
