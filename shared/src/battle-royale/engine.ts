@@ -38,6 +38,7 @@ function event(match: BattleMatch, type: BattleEvent["type"], title: string, des
   match.events.unshift(item); return item;
 }
 function alivePlayers(team: BattleTeam): BattlePlayer[] { return team.players.filter(p => p.alive); }
+function activePlayers(team: BattleTeam): BattlePlayer[] { return team.players.filter(p => p.alive && !p.knocked); }
 function aliveTeams(match: BattleMatch): BattleTeam[] { return match.teams.filter(t => t.alive); }
 function isFinished(match: BattleMatch): boolean { return match.stage === "FINISHED"; }
 function updateCounts(match: BattleMatch): void {
@@ -98,7 +99,7 @@ function collectLoot(team: BattleTeam, drops: LootDrop[]): { collected: LootDrop
   return { collected, remaining };
 }
 function teamPower(team: BattleTeam): number {
-  const players = alivePlayers(team); if (!players.length) return 0;
+  const players = activePlayers(team); if (!players.length) return 0;
   const skill = players.reduce((sum, p) => sum + (p.skills.overall * 0.25 + p.skills.aim * 0.18 + p.skills.building * 0.18 + p.skills.gameSense * 0.16 + p.skills.positioning * 0.12 + p.skills.teamwork * 0.11), 0) / players.length;
   const weapon = team.inventory.weapons.length ? team.inventory.weapons.reduce((sum, w) => sum + w.damage, 0) / team.inventory.weapons.length / 1.2 : 15;
   const gear = clamp(weapon, 10, 100);
@@ -124,12 +125,20 @@ function fight(match: BattleMatch, random: SeededRandom): FightReport {
   const winProbability = clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage, 5, 95);
   const won = random.next() * 100 < winProbability;
   const enemyAlive = alivePlayers(enemy);
-  const allies = alivePlayers(match.userTeam);
+  const allies = activePlayers(match.userTeam);
   const enemyEliminations = won ? enemyAlive.length : random.nextInt(0, Math.max(1, enemyAlive.length - 1));
   const allyLosses = won ? (random.next() < 0.12 ? 1 : 0) : Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)));
   for (let i = 0; i < enemyEliminations; i++) eliminatePlayer(enemyAlive[i]);
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
-  for (let i = 0; i < allyLosses; i++) eliminatePlayer(allies[allies.length - 1 - i]);
+  for (let i = 0; i < allyLosses; i++) {
+    const downed = allies[allies.length - 1 - i];
+    downed.knocked = true;
+    downed.health = 0;
+    downed.shield = 0;
+  }
+  if (!activePlayers(match.userTeam).length && match.userTeam.players.some(player => player.knocked && player.alive)) {
+    for (const player of match.userTeam.players.filter(player => player.knocked && player.alive)) eliminatePlayer(player);
+  }
   if (!alivePlayers(enemy).length) { enemy.alive = false; enemy.placement = match.teamsRemaining; }
   if (!alivePlayers(match.userTeam).length) match.userTeam.alive = false;
   const summary = won ? `Victoire contre ${enemy.name} ! ${enemyEliminations} adversaire(s) éliminé(s).` : `Combat perdu contre ${enemy.name}. ${allyLosses} mate(s) éliminé(s), replie-toi.`;
@@ -147,6 +156,16 @@ function refresh(team: BattleTeam, location: MapLocation, random: SeededRandom, 
   }
   team.builds += 1;
   return gained;
+}
+function reviveTeam(team: BattleTeam, playerId?: string): string {
+  if (!activePlayers(team).length) return "Il faut au moins un équipier actif pour réanimer un mate.";
+  const target = team.players.find(player => player.id === playerId && player.alive && player.knocked)
+    ?? team.players.find(player => player.alive && player.knocked);
+  if (!target) return "Aucun équipier à terre à réanimer.";
+  target.knocked = false;
+  target.health = 30;
+  target.shield = 0;
+  return `${target.name} est réanimé avec 30 PV.`;
 }
 function healTeam(team: BattleTeam, itemDefinitionId?: string, playerId?: string): string {
   const target = team.players.find(p => p.id === playerId && p.alive) ?? team.players.find(p => p.alive && (p.health < 100 || p.shield < 100));
@@ -207,6 +226,11 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
         const report = fight(match, random);
         event(match, "INFO", "Rencontre sur la rotation", report.summary);
       }
+      break;
+    }
+    case "REVIVE": {
+      const summary = reviveTeam(match.userTeam, action.playerId);
+      event(match, "INFO", "Réanimation", summary);
       break;
     }
     case "HEAL": {
@@ -326,6 +350,9 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
     { type: "HEAL", label: "Se soigner", description: "Utiliser les consommables pour récupérer vie et bouclier.", risk: "LOW" },
     { type: "HOLD_POSITION", label: "Jouer la position", description: "Dépenser des matériaux pour sécuriser une construction.", risk: "MEDIUM" },
     { type: "LOOT", label: "Continuer à looter", description: "Chercher des armes, des soins et des munitions.", risk: "MEDIUM" },
+    ...(match.userTeam.players.some(player => player.alive && player.knocked) && activePlayers(match.userTeam).length > 0
+      ? [{ type: "REVIVE" as const, label: "Réanimer un équipier", description: "Remettre un mate à terre dans le combat avec 30 PV.", risk: "MEDIUM" as const }]
+      : []),
   ];
 }
 export function getRarityRollTable(): ReadonlyArray<{ rarity: Rarity; weight: number }> {
