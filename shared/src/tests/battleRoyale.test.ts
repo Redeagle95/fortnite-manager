@@ -54,7 +54,7 @@ describe("Battle Royale simulation", () => {
     takeZoneAction(match, { type: "REFRESH", material: "WOOD" });
     expect(match.storm.radius).toBe(3000);
     expect(getActionOptions(match).map(a => a.type)).toContain("FIGHT_THEN_ROTATE");
-    takeZoneAction(match, { type: "ROTATE" });
+    takeZoneAction(match, { type: "REFRESH" });
     expect(match.storm.radius).toBe(1900);
     takeZoneAction(match, { type: "REFRESH" });
     expect(match.storm.radius).toBe(950);
