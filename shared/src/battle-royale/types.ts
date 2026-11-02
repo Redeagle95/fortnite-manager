@@ -3,7 +3,8 @@ export type Rarity = "COMMON" | "UNCOMMON" | "RARE" | "EPIC" | "LEGENDARY" | "MY
 export type WeaponCategory = "ASSAULT_RIFLE" | "SHOTGUN" | "SNIPER" | "SMG" | "PISTOL";
 export type Material = "WOOD" | "STONE" | "METAL";
 export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
-export type ActionType = "FIGHT" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE";
+export type TacticalStyle = "HEIGHT" | "MID" | "LOW" | "OUTSIDE";
+export type ActionType = "FIGHT" | "FIGHT_THEN_ROTATE" | "FIGHT_HEIGHT" | "FIGHT_MID" | "FIGHT_LOW" | "FIGHT_OUTSIDE" | "LOOT" | "REFRESH" | "ROTATE" | "HEAL" | "HOLD_POSITION" | "REVIVE";
 
 export interface PlayerSkill {
   aim: number; building: number; gameSense: number; positioning: number;
@@ -62,7 +63,12 @@ export interface BattleMatch {
   finalPlacement: number | null; result: "WIN" | "ELIMINATED" | null;
 }
 export type BattleAction =
-  | { type: "FIGHT" }
+  | { type: "FIGHT"; style?: TacticalStyle }
+  | { type: "FIGHT_THEN_ROTATE"; locationId?: string }
+  | { type: "FIGHT_HEIGHT" }
+  | { type: "FIGHT_MID" }
+  | { type: "FIGHT_LOW" }
+  | { type: "FIGHT_OUTSIDE" }
   | { type: "LOOT" }
   | { type: "REFRESH"; material?: Material }
   | { type: "ROTATE"; locationId?: string }
