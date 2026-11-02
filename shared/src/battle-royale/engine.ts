@@ -189,37 +189,74 @@ export function getFightProbability(match: BattleMatch, style?: "HEIGHT" | "MID"
 function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE", combatMode?: "FOCUS" | "BOXFIGHT", targetPlayerId?: string): FightReport {
   const enemy = findEnemy(match, match.stage === "DROP" ? match.selectedDropId : match.currentLocationId);
   if (!enemy) return { winProbability: 100, won: true, enemyTeamName: "Personne", enemyEliminations: 0, allyLosses: 0, summary: "Aucun adversaire sur ce spot : ton équipe sécurise la zone." };
-  const baseProbability = getFightProbability(match, style);
+
   const allies = activePlayers(match.userTeam);
+  const enemyAlive = alivePlayers(enemy);
+  const baseProbability = getFightProbability(match, style);
   const averageAim = allies.reduce((sum, player) => sum + player.skills.aim + player.skills.teamwork, 0) / Math.max(1, allies.length) / 2;
   const averageBuild = allies.reduce((sum, player) => sum + player.skills.building, 0) / Math.max(1, allies.length);
   const fragger = activeRolePlayer(match.userTeam, "FRAGGER");
+  const shotgun = match.userTeam.inventory.weapons.some(weapon => weapon.category === "SHOTGUN");
+  const buildResources = match.userTeam.resources.wood + match.userTeam.resources.stone + match.userTeam.resources.metal;
   const focusBonus = combatMode === "FOCUS" ? averageAim * 0.075 + (fragger ? fragger.skills.aim * 0.04 : 0) : 0;
-  const boxBonus = combatMode === "BOXFIGHT" ? averageBuild * 0.09 + (match.userTeam.inventory.weapons.some(weapon => weapon.category === "SHOTGUN") ? 5 : -2) : 0;
+  const boxBonus = combatMode === "BOXFIGHT" ? averageBuild * 0.09 + (shotgun ? 5 : -2) + Math.min(5, buildResources / 300) : 0;
   const winProbability = Math.round(clamp(baseProbability + focusBonus + boxBonus, 5, 95));
   const won = random.next() * 100 < winProbability;
-  const enemyAlive = alivePlayers(enemy);
-  if (targetPlayerId) enemyAlive.sort((a, b) => Number(b.id === targetPlayerId) - Number(a.id));
-  else if (combatMode === "FOCUS") enemyAlive.sort((a, b) => (a.health + a.shield) - (b.health + b.shield));
-  const enemyEliminations = won ? enemyAlive.length : random.nextInt(0, Math.max(1, enemyAlive.length - 1));
+
+  // Focus fire concentrates every teammate on the selected opponent. Otherwise,
+  // the squad prioritizes the weakest available target and retargets after a knock/elimination.
+  const selectedTarget = enemyAlive.find(player => player.id === targetPlayerId);
   const support = activeRolePlayer(match.userTeam, "SUPPORT");
   const protection = support ? 0.12 + support.skills.teamwork * 0.002 : 0;
-  const allyLosses = won ? (random.next() < 0.12 * (1 - protection) ? 1 : 0) : Math.max(0, Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)) - (support ? 1 : 0)));
-  const userKiller = activePlayers(match.userTeam).sort((a, b) => Number(b.role === "FRAGGER") - Number(a.role === "FRAGGER"))[0];
-  for (let i = 0; i < enemyEliminations; i++) {
-    const victim = enemyAlive[i];
-    eliminatePlayer(victim);
-    if (userKiller) userKiller.eliminations += 1;
-    event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
+  let totalDamage = 0;
+  let enemyEliminations = 0;
+  const styleWeaponMultiplier = style === "HEIGHT" ? 1.08 : style === "OUTSIDE" ? 0.92 : 1;
+
+  for (let index = 0; index < allies.length && enemyAlive.some(player => player.alive); index++) {
+    const attacker = allies[index];
+    const target = combatMode === "FOCUS" && selectedTarget?.alive
+      ? selectedTarget
+      : enemyAlive.filter(player => player.alive).sort((a, b) => (a.health + a.shield) - (b.health + b.shield))[0];
+    if (!target) break;
+
+    const weapons = match.userTeam.inventory.weapons;
+    const preferred = combatMode === "BOXFIGHT"
+      ? weapons.filter(weapon => weapon.category === "SHOTGUN").sort((a, b) => b.damage - a.damage)[0]
+      : weapons.filter(weapon => ["ASSAULT_RIFLE", "SMG", "SNIPER"].includes(weapon.category)).sort((a, b) => b.damage - a.damage)[0];
+    const weapon = preferred ?? weapons.slice().sort((a, b) => b.damage - a.damage)[0];
+    const baseDamage = weapon?.damage ?? 42;
+    const aimMultiplier = 0.72 + attacker.skills.aim * 0.005;
+    const shotgunMultiplier = combatMode === "BOXFIGHT" ? (weapon?.category === "SHOTGUN" ? 1.38 : 0.78) : 1;
+    const buildingMultiplier = combatMode === "BOXFIGHT" ? 0.9 + attacker.skills.building * 0.002 + Math.min(0.12, buildResources / 12500) : 1;
+    const enemyBuild = combatMode === "BOXFIGHT"
+      ? enemyAlive.reduce((sum, player) => sum + player.skills.building, 0) / Math.max(1, enemyAlive.length)
+      : 0;
+    const defensiveBuild = combatMode === "BOXFIGHT" ? 1 - Math.min(0.16, enemyBuild * 0.001 + (enemy.resources.wood + enemy.resources.stone + enemy.resources.metal) / 18000) : 1;
+    const inflicted = Math.max(1, Math.round(baseDamage * aimMultiplier * shotgunMultiplier * buildingMultiplier * defensiveBuild * styleWeaponMultiplier));
+    const shieldDamage = Math.min(target.shield, inflicted);
+    target.shield -= shieldDamage;
+    const healthDamage = Math.min(target.health, inflicted - shieldDamage);
+    target.health -= healthDamage;
+    const actualDamage = shieldDamage + healthDamage;
+    attacker.damageDealt += actualDamage;
+    match.userTeam.damageDealt += actualDamage;
+    totalDamage += actualDamage;
+
+    if (target.health <= 0) {
+      eliminatePlayer(target);
+      attacker.eliminations += 1;
+      match.userTeam.eliminations += 1;
+      enemyEliminations += 1;
+      event(match, "ELIMINATION", "Élimination", `${attacker.name} (${match.userTeam.name}) élimine ${target.name} (${enemy.name}) après ${actualDamage} dégâts.`);
+    }
   }
-  if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
-  const fraggerMultiplier = (fragger ? 1.05 + fragger.skills.aim * 0.001 : 1) * (match.userTeam.strategy === "AGGRESSIVE" ? 1.08 : match.userTeam.strategy === "OPPORTUNISTIC" && activePlayers(enemy).some(player => player.health + player.shield < 65) ? 1.1 : 1);
-  const damage = Math.round((enemyEliminations * 100 + (won ? 80 : 35)) * fraggerMultiplier);
-  match.userTeam.damageDealt += damage;
-  if (userKiller) userKiller.damageDealt += damage;
+
+  const allyLosses = won
+    ? (random.next() < 0.12 * (1 - protection) ? 1 : 0)
+    : Math.max(0, Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)) - (support ? 1 : 0)));
   for (let i = 0; i < allyLosses; i++) {
     const downed = allies[allies.length - 1 - i];
-    downed.knocked = true; downed.health = 0; downed.shield = 0;
+    if (downed && downed.alive) { downed.knocked = true; downed.health = 0; downed.shield = 0; }
   }
   if (!activePlayers(match.userTeam).length && match.userTeam.players.some(player => player.knocked && player.alive)) {
     const enemyKiller = activePlayers(enemy)[0];
@@ -228,13 +265,19 @@ function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID
       event(match, "ELIMINATION", "Élimination", `${enemyKiller?.name ?? enemy.name} (${enemy.name}) élimine ${player.name} (${match.userTeam.name}).`);
     }
   }
-  if (!alivePlayers(enemy).length) { enemy.alive = false; enemy.placement = match.teamsRemaining; }
+  if (!alivePlayers(enemy).length) {
+    enemy.alive = false;
+    enemy.placement = match.teamsRemaining;
+    event(match, "INFO", "Équipe éliminée", `${enemy.name} est entièrement éliminée.`);
+  }
   if (!alivePlayers(match.userTeam).length) match.userTeam.alive = false;
-  const styleLabel = style ? ({ HEIGHT: "hauteur", MID: "milieu", LOW: "bas", OUTSIDE: "hors zone" }[style]) : "standard";
-  const summary = won ? "Victoire contre " + enemy.name + " en jouant " + styleLabel + " ! " + enemyEliminations + " adversaire(s) éliminé(s)." : "Combat perdu contre " + enemy.name + " en jouant " + styleLabel + ". " + allyLosses + " mate(s) à terre.";
+  const styleLabel = style ? ({ HEIGHT: "hauteur", MID: "milieu", LOW: "bas", OUTSIDE: "extérieur" }[style]) : "standard";
+  const modeLabel = combatMode === "FOCUS" ? " en focus d'équipe" : combatMode === "BOXFIGHT" ? " en boxfight" : "";
+  const summary = `${won ? "Avantage remporté" : "Échange perdu"} contre ${enemy.name}${modeLabel} (${styleLabel}) : ${totalDamage} dégâts infligés, ${enemyEliminations} élimination(s), ${allyLosses} mate(s) à terre.`;
   event(match, "FIGHT", won ? "Combat remporté" : "Combat perdu", summary);
   return { winProbability, won, enemyTeamName: enemy.name, enemyEliminations, allyLosses, summary };
 }
+
 function refresh(team: BattleTeam, location: MapLocation, random: SeededRandom, requested?: Material): number {
   const materials: Material[] = requested ? [requested] : ["WOOD", "STONE", "METAL"];
   let gained = 0;
@@ -270,8 +313,10 @@ function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
   const weaponDamage = match.userTeam.inventory.weapons.reduce((sum, weapon) => sum + weapon.damage, 0) / Math.max(1, match.userTeam.inventory.weapons.length);
   let remaining = Math.round(Math.max(35, active.length * (25 + aim * 0.25 + weaponDamage * 0.18) + random.nextInt(0, 25)));
   let inflicted = 0;
+  let attackerIndex = 0;
   for (const target of activePlayers(enemy)) {
     if (remaining <= 0) break;
+    const attacker = active[attackerIndex++ % Math.max(1, active.length)];
     const shieldDamage = Math.min(target.shield, remaining);
     target.shield -= shieldDamage;
     remaining -= shieldDamage;
@@ -281,9 +326,11 @@ function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
     remaining -= healthDamage;
     actual += healthDamage;
     inflicted += actual;
+    if (attacker) attacker.damageDealt += actual;
     if (target.health <= 0) {
       eliminatePlayer(target);
-      event(match, "ELIMINATION", "Élimination", `Ton équipe élimine ${target.name} (${enemy.name}) après un tag de surge.`);
+      if (attacker) attacker.eliminations += 1;
+      event(match, "ELIMINATION", "Élimination", `${attacker?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${target.name} (${enemy.name}) après un tag de surge.`);
       match.userTeam.eliminations += 1;
     }
   }
@@ -307,19 +354,33 @@ function reviveTeam(team: BattleTeam, playerId?: string): string {
   return `${target.name} est réanimé avec ${target.health} PV${support ? " grâce au Support" : ""}.`;
 }
 function healTeam(team: BattleTeam, itemDefinitionId?: string, playerId?: string): string {
-  const target = team.players.find(p => p.id === playerId && p.alive) ?? team.players.find(p => p.alive && (p.health < 100 || p.shield < 100));
-  if (!target) return "Aucun mate n'a besoin de soins.";
-  const itemIndex = team.inventory.items.findIndex(i => i.kind === "HEAL" && (!itemDefinitionId || i.definitionId === itemDefinitionId) && i.quantity > 0);
-  if (itemIndex < 0) return "Aucun consommable de soin disponible.";
-  const item = team.inventory.items[itemIndex];
-  const before = target.health + target.shield;
   const support = activeRolePlayer(team, "SUPPORT");
   const supportMultiplier = support ? 1.15 + support.skills.teamwork * 0.001 : 1;
-  target.health = Math.min(100, target.health + Math.round((item.heal ?? 0) * supportMultiplier));
-  target.shield = Math.min(100, target.shield + Math.round((item.shield ?? 0) * supportMultiplier));
-  item.quantity -= 1;
-  if (item.quantity <= 0) team.inventory.items.splice(itemIndex, 1);
-  return `${target.name} récupère ${Math.round(target.health + target.shield - before)} points de vie/bouclier grâce à ${item.name}.`;
+  const targets = team.players.filter(player => player.alive && !player.knocked && (player.health < 100 || player.shield < 100));
+  const availableItems = team.inventory.items.filter(item => item.kind === "HEAL" && item.quantity > 0 && (!itemDefinitionId || item.definitionId === itemDefinitionId));
+  if (!targets.length) return "Aucun mate actif n'a besoin de soins.";
+  if (!availableItems.length) return "Aucun consommable de soin disponible.";
+
+  // Select the player/item pair that restores the most missing effective HP,
+  // respecting separate 100 HP and 100 shield caps.
+  let best: { target: BattlePlayer; item: ItemStack; restored: number } | undefined;
+  for (const target of targets) {
+    if (playerId && target.id !== playerId) continue;
+    for (const item of availableItems) {
+      const healthGain = Math.min(100 - target.health, Math.round((item.heal ?? 0) * supportMultiplier));
+      const shieldGain = Math.min(100 - target.shield, Math.round((item.shield ?? 0) * supportMultiplier));
+      const restored = healthGain + shieldGain;
+      if (restored > (best?.restored ?? 0)) best = { target, item, restored };
+    }
+  }
+  if (!best || best.restored <= 0) return "Aucun soin adapté aux PV ou boucliers manquants.";
+  const before = best.target.health + best.target.shield;
+  best.target.health = Math.min(100, best.target.health + Math.round((best.item.heal ?? 0) * supportMultiplier));
+  best.target.shield = Math.min(100, best.target.shield + Math.round((best.item.shield ?? 0) * supportMultiplier));
+  best.item.quantity -= 1;
+  if (best.item.quantity <= 0) team.inventory.items.splice(team.inventory.items.indexOf(best.item), 1);
+  const restored = Math.round(best.target.health + best.target.shield - before);
+  return `${best.target.name} récupère ${restored} PV/bouclier avec ${best.item.name} (PV ${best.target.health}/100 · bouclier ${best.target.shield}/100).`;
 }
 function nearestLocation(match: BattleMatch, random: SeededRandom): MapLocation {
   const candidates = match.map.locations.filter(l => l.id !== match.currentLocationId);

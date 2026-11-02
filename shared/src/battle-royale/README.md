@@ -62,8 +62,12 @@ Knockdowns and revives remain active throughout the match: a downed teammate can
 
 - Choose an IGL strategy before starting: prudent, aggressive, strategic or opportunistic. Bot squads receive their own strategy, influencing their rotations and willingness to fight.
 - Squad roles (IGL, fragger, support and scout) and individual elimination/damage statistics are tracked.
-- Focus-fire and boxfight choices add team-coordination and close-range combat modifiers. Disengage moves the squad toward a safer location.
-- Healing can be used when teammates need health or shield. Ground loot remains available for later pickup; when weapon slots are full, choose which weapon to replace.
+- Focus-fire lets the user select a specific living opponent; teammates concentrate their attacks on that target and retarget after an elimination.
+- Boxfights resolve individual attacks using weapon damage, aim, building skill, available materials, shotgun selection and the opponent's defensive build.
+- Disengage moves the squad toward a safer location without initiating an optional fight on that decision.
+- Healing automatically selects the player/item combination that restores the most missing health and shield without exceeding either 100-point cap.
+- Combat and storm-surge damage and eliminations are attributed to individual teammates; the dashboard shows team totals and each player's personal statistics.
+- Ground loot remains available for later pickup; when weapon slots are full, choose which weapon to replace.
 - After the sixth contraction, the final safe zone moves continuously. Zone 7 remains active until only one squad is left.
 - Match results award placement points plus two points per team elimination.
 
