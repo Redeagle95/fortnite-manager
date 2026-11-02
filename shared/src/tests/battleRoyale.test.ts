@@ -420,10 +420,8 @@ describe("Battle Royale simulation", () => {
     let lowQualityScore = 0;
     let highQualityScore = 0;
     for (let seed = 1; seed <= 60; seed++) {
-      const low = createBattleRoyale(12000 + seed, "SOLO", "pine-woods");
-      const high = createBattleRoyale(12000 + seed, "SOLO", "pine-woods");
-      low.map.locations.find(location => location.id === low.currentLocationId)!.lootQuality = 0;
-      high.map.locations.find(location => location.id === high.currentLocationId)!.lootQuality = 100;
+      const low = createBattleRoyale(12000 + seed, "SOLO", "quiet-farm");
+      const high = createBattleRoyale(12000 + seed, "SOLO", "tilted-district");
       resolveDrop(low, { type: "LOOT" });
       resolveDrop(high, { type: "LOOT" });
       lowQualityScore += low.userTeam.inventory.weapons.reduce((sum, weapon) => sum + rarityScore[weapon.rarity], 0);
