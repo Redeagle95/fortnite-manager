@@ -329,6 +329,14 @@ describe("Battle Royale simulation", () => {
     boxfight.userTeam.inventory.weapons = [{id:"box-shotgun",definitionId:"box-shotgun",name:"Pompe",category:"SHOTGUN",rarity:"RARE",damage:55,magazine:5,ammo:5}];
     for (const player of boxfight.userTeam.players) player.skills.building = 100;
     boxfight.userTeam.resources = {wood:500,stone:500,metal:500};
+    for (const match of [standard, boxfight]) {
+      const enemies = match.teams.filter(team => !team.isUser && team.alive);
+      const samePoi = enemies.filter(team => team.dropLocationId === match.currentLocationId);
+      const enemy = (samePoi.length ? samePoi : enemies).sort((a, b) =>
+        Math.hypot(a.position.x - match.userTeam.position.x, a.position.y - match.userTeam.position.y)
+        - Math.hypot(b.position.x - match.userTeam.position.x, b.position.y - match.userTeam.position.y))[0];
+      for (const player of enemy.players.filter(player => player.alive)) player.health = 1000;
+    }
     const standardBefore = standard.userTeam.damageDealt;
     const boxBefore = boxfight.userTeam.damageDealt;
     takeZoneAction(standard, { type: "FIGHT" });
