@@ -86,7 +86,7 @@ function makeDrop(match: BattleMatch, location: MapLocation, random: SeededRando
       drops.push({ id: `loot-${match.lootOnGround.length + drops.length + 1}`, kind: "MATERIAL", name: material, material, rarity: "COMMON", quantity: random.nextInt(20, 50) });
     }
   }
-  return drops;
+  return drops.map(drop => ({ ...drop, locationId: location.id }));
 }
 function collectLoot(team: BattleTeam, drops: LootDrop[]): { collected: LootDrop[]; remaining: LootDrop[] } {
   const collected: LootDrop[] = [];
@@ -402,6 +402,17 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
     };
   }
 
+  // Supply drops appear in the mid-game at a safe POI and contain higher-rarity loot.
+  if (match.phaseIndex >= 2 && match.phaseIndex <= 5 && random.next() < 0.055 && !match.lootOnGround.some(drop => drop.isSupplyDrop)) {
+    const safeDropLocations = match.map.locations.filter(location => isInsideStorm(location.x, location.y, match.stormTarget));
+    const pool = safeDropLocations.length ? safeDropLocations : match.map.locations;
+    const supplyLocation = pool[random.nextInt(0, pool.length - 1)];
+    const supplyLoot = makeDrop(match, { ...supplyLocation, lootQuality: 100, lootAmount: 9 }, random).slice(0, 8)
+      .map(drop => ({ ...drop, isSupplyDrop: true }));
+    match.lootOnGround.push(...supplyLoot);
+    event(match, "SUPPLY_DROP", "Ravitaillement aérien", `Un ravitaillement arrive à ${supplyLocation.name} avec du loot de meilleure qualité.`);
+  }
+
   // Resolve at most one encounter per team in this tick. Each death gets its own feed entry.
   const engaged = new Set<string>();
   for (const team of enemies) {
@@ -487,6 +498,11 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       const index = match.lootOnGround.findIndex(drop => drop.id === action.dropId);
       if (index < 0) { event(match, "INFO", "Loot indisponible", "Cet objet n'est plus au sol."); break; }
       const drop = match.lootOnGround[index];
+      if (drop.locationId && drop.locationId !== match.currentLocationId) {
+        const dropLocation = match.map.locations.find(location => location.id === drop.locationId);
+        event(match, "INFO", "Loot trop éloigné", `Cet objet se trouve à ${dropLocation?.name ?? "un autre lieu"}.`);
+        break;
+      }
       if (drop.kind === "WEAPON" && match.userTeam.inventory.weapons.length >= match.userTeam.inventory.maxWeaponSlots) {
         const weaponIndex = match.userTeam.inventory.weapons.findIndex(weapon => weapon.id === action.replaceWeaponId);
         if (weaponIndex < 0) { event(match, "INFO", "Inventaire plein", "Choisis l'arme à remplacer pour ramasser cet équipement."); break; }
