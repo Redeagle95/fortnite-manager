@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBattleRoyale, getActionOptions, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
+import { createBattleRoyale, getActionOptions, getFightProbability, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
 
 describe("Battle Royale simulation", () => {
   it("creates a full lobby and offers spawn decisions", () => {
@@ -18,7 +18,7 @@ describe("Battle Royale simulation", () => {
     expect(getInventorySummary(match.userTeam).weapons.length).toBeLessThanOrEqual(5);
     takeZoneAction(match, { type: "REFRESH", material: "WOOD" });
     expect(match.userTeam.resources.wood).toBeGreaterThan(0);
-    expect(match.phaseIndex).toBe(1);
+    expect(match.phaseIndex).toBe(2);
   });
 
   it("rejects a second spawn decision", () => {
@@ -46,4 +46,34 @@ describe("Battle Royale simulation", () => {
     expect(target.alive).toBe(true);
     expect(target.health).toBeGreaterThan(0);
   });
+  it("uses five decision zones and contracts the storm", () => {
+    const match = createBattleRoyale(888, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    expect(match.phaseIndex).toBe(1);
+    expect(match.storm.radius).toBe(4200);
+    takeZoneAction(match, { type: "REFRESH", material: "WOOD" });
+    expect(match.storm.radius).toBe(3000);
+    expect(getActionOptions(match).map(a => a.type)).toContain("FIGHT_THEN_ROTATE");
+    takeZoneAction(match, { type: "ROTATE" });
+    expect(match.storm.radius).toBe(1900);
+    takeZoneAction(match, { type: "REFRESH" });
+    expect(match.storm.radius).toBe(950);
+    expect(getActionOptions(match).map(a => a.type)).toEqual(expect.arrayContaining(["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE"]));
+  });
+
+  it("caps each material at 500", () => {
+    const match = createBattleRoyale(889, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.resources.wood = 490;
+    takeZoneAction(match, { type: "REFRESH", material: "WOOD" });
+    expect(match.userTeam.resources.wood).toBeLessThanOrEqual(500);
+  });
+
+  it("uses weapon category synergy in final-zone estimates", () => {
+    const match = createBattleRoyale(890, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.inventory.weapons = [{ id: "test-ar", definitionId: "assault-rifle", name: "Test AR", category: "ASSAULT_RIFLE", rarity: "LEGENDARY", damage: 45, magazine: 30, ammo: 30 }];
+    expect(getFightProbability(match, "HEIGHT")).toBeGreaterThan(getFightProbability(match, "LOW"));
+  });
+
 });
