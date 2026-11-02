@@ -215,4 +215,15 @@ describe("Battle Royale simulation", () => {
     expect(match.userTeam.rebootTokens).toBe(0);
   });
 
+  it("keeps ground loot at its POI until the team rotates there", () => {
+    const match = createBattleRoyale(9107, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const remote = match.map.locations.find(location => location.id !== match.currentLocationId)!;
+    const drop = {id:"remote-supply-item",kind:"HEAL" as const,name:"Small shield",definitionId:"small-shield",rarity:"UNCOMMON" as const,quantity:1,locationId:remote.id,isSupplyDrop:true};
+    match.lootOnGround.push(drop);
+    takeZoneAction(match,{type:"PICKUP_LOOT",dropId:drop.id});
+    expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(true);
+    expect(match.userTeam.inventory.items.some(item=>item.definitionId==="small-shield")).toBe(false);
+  });
+
 });
