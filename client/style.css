@@ -41,3 +41,5 @@
 .empty-feed{font-size:10px;line-height:1.6;color:var(--muted)}
 .map-legend .legend-opponent{background:#d94d5c}
 @media(max-width:900px){.bottom-grid{grid-template-columns:1fr}}
+
+.team-marker{transition:left .9s ease,top .9s ease}
