@@ -605,19 +605,19 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       break;
     }
     case "FIGHT_HEIGHT": {
-      const report = fight(match, random, "HEIGHT");
+      fight(match, random, "HEIGHT");
       break;
     }
     case "FIGHT_MID": {
-      const report = fight(match, random, "MID");
+      fight(match, random, "MID");
       break;
     }
     case "FIGHT_LOW": {
-      const report = fight(match, random, "LOW");
+      fight(match, random, "LOW");
       break;
     }
     case "FIGHT_OUTSIDE": {
-      const report = fight(match, random, "OUTSIDE");
+      fight(match, random, "OUTSIDE");
       break;
     }
     case "LOOT": {
