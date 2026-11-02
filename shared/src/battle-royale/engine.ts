@@ -206,10 +206,32 @@ function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
   const active = activePlayers(match.userTeam);
   const aim = active.reduce((sum, player) => sum + player.skills.aim, 0) / Math.max(1, active.length);
   const weaponDamage = match.userTeam.inventory.weapons.reduce((sum, weapon) => sum + weapon.damage, 0) / Math.max(1, match.userTeam.inventory.weapons.length);
-  const damage = Math.round(Math.max(35, active.length * (35 + aim * 0.35 + weaponDamage * 0.25) + random.nextInt(0, 35)));
-  match.userTeam.damageDealt += damage;
-  event(match, "SURGE", "Tags de surge", `Ton équipe inflige ${damage} dégâts à ${enemy.name} sans s'engager jusqu'à l'élimination. Progression : ${match.userTeam.damageDealt}/${match.surgeThreshold}.`);
-  return damage;
+  let remaining = Math.round(Math.max(35, active.length * (25 + aim * 0.25 + weaponDamage * 0.18) + random.nextInt(0, 25)));
+  let inflicted = 0;
+  for (const target of activePlayers(enemy)) {
+    if (remaining <= 0) break;
+    const shieldDamage = Math.min(target.shield, remaining);
+    target.shield -= shieldDamage;
+    remaining -= shieldDamage;
+    let actual = shieldDamage;
+    const healthDamage = Math.min(target.health, remaining);
+    target.health -= healthDamage;
+    remaining -= healthDamage;
+    actual += healthDamage;
+    inflicted += actual;
+    if (target.health <= 0) {
+      eliminatePlayer(target);
+      event(match, "ELIMINATION", "Élimination", `Ton équipe élimine ${target.name} (${enemy.name}) après un tag de surge.`);
+      match.userTeam.eliminations += 1;
+    }
+  }
+  match.userTeam.damageDealt += inflicted;
+  if (!alivePlayers(enemy).length) {
+    enemy.alive = false;
+    event(match, "INFO", "Équipe éliminée", `${enemy.name} est entièrement éliminée après les tags.`);
+  }
+  event(match, "SURGE", "Tags de surge", `Ton équipe inflige réellement ${inflicted} dégâts à ${enemy.name}. Progression : ${match.userTeam.damageDealt}/${match.surgeThreshold}.`);
+  return inflicted;
 }
 function reviveTeam(team: BattleTeam, playerId?: string): string {
   if (!activePlayers(team).length) return "Il faut au moins un équipier actif pour réanimer un mate.";
