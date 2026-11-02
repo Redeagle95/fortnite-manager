@@ -135,29 +135,34 @@ function actionsForZone(match) {
   else if (match.phaseIndex === 2) actions = [
     {type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},
     {type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags réels sur une équipe adverse pour atteindre le seuil de dégâts avant la storm surge.",risk:"MEDIUM"}
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags réels sur une équipe adverse pour atteindre le seuil.",risk:"MEDIUM"}
   ];
   else if (match.phaseIndex === 3) actions = [
     {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},
     {type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},
     {type:"REFRESH",label:"Refresh matériaux",description:"Compléter progressivement les ressources de l’équipe.",risk:"LOW"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants aux adversaires pour éviter les pulses de storm surge.",risk:"MEDIUM"}
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants aux adversaires.",risk:"MEDIUM"}
+  ];
+  else if (match.phaseIndex === 4 || match.phaseIndex === 5) actions = [
+    {type:"FIGHT",label:"Prendre un fight contrôlé",description:"Tenter une élimination avant le dernier cercle.",risk:"HIGH"},
+    {type:"ROTATE",label:"Prendre une bonne position",description:"Rejoindre le prochain cercle et sécuriser une position jouable.",risk:"MEDIUM"},
+    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter les ressources avant le dernier cercle.",risk:"LOW"},
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre les derniers tags nécessaires pour atteindre le seuil.",risk:"MEDIUM"}
   ];
   else actions = [
     {type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},
     {type:"FIGHT_MID",label:"Jouer au milieu",description:"Synergie renforcée avec les pompes.",risk:"HIGH",style:"MID"},
     {type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},
-    {type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"},
-    {type:"FARM_SURGE",label:"Prendre les derniers tags",description:"Infliger les dégâts nécessaires si la storm surge est encore active.",risk:"MEDIUM"}
+    {type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}
   ];
   if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV. Au moins un joueur doit rester actif.",risk:"MEDIUM"});
   return actions;
 }
 function renderActions(match) {
   const actions = match.stage === "DROP" ? spawnActions : actionsForZone(match);
-  const zoneNumber = match.stage === "DROP" ? 1 : Math.min(5, match.phaseIndex + 1);
+  const zoneNumber = match.stage === "DROP" ? 1 : Math.min(7, match.phaseIndex + 1);
   $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
-  $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : "Le pourcentage tient compte de ton équipement et de la position choisie.";
+  $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
   $("action-list").innerHTML = actions.map(a => {
     const style = a.style || (a.type === "FIGHT_HEIGHT" ? "HEIGHT" : a.type === "FIGHT_MID" ? "MID" : a.type === "FIGHT_LOW" ? "LOW" : a.type === "FIGHT_OUTSIDE" ? "OUTSIDE" : undefined);
@@ -197,18 +202,19 @@ function renderEvents(events) {
   $("event-log").innerHTML = events.slice(0, 8).map(item => `<div class="event-row"><b>${escapeHtml(item.title)}</b><p>${escapeHtml(item.description)}</p></div>`).join("");
   const eliminations = events.filter(item => item.type === "ELIMINATION").slice(0, 20);
   $("elimination-feed").innerHTML = eliminations.length
-    ? eliminations.map(item => `<div class="elimination-row"><b>${escapeHtml(item.description)}</b><small>Zone ${Math.min(5, item.phase + 1)} · ${new Date(item.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>`).join("")
+    ? eliminations.map(item => `<div class="elimination-row"><b>${escapeHtml(item.description)}</b><small>Zone ${Math.min(7, item.phase + 1)} · ${new Date(item.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>`).join("")
     : '<p class="empty-feed">Aucune élimination pour le moment. Les affrontements entre équipes apparaîtront ici.</p>';
 }
 function renderMatch(match) {
   currentMatch = match;
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
-  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(5, match.phaseIndex + 1);
+  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(7, match.phaseIndex + 1);
   $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
-  $("phase-number").textContent = match.stage === "DROP" ? "1/5" : match.stage === "FINISHED" ? "FIN" : Math.min(5, match.phaseIndex + 1) + "/5";
+  $("kills-left").textContent = match.userTeam.eliminations;
+  $("phase-number").textContent = match.stage === "DROP" ? "1/7" : match.stage === "FINISHED" ? "FIN" : Math.min(7, match.phaseIndex + 1) + "/5";
   renderMap(match);
   renderActions(match);
   renderTeam(match.userTeam);
