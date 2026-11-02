@@ -59,3 +59,5 @@
 .player-name{line-height:1.4}
 
 .series-results{display:grid;gap:5px;padding-top:8px;color:#9eb1c8;font-size:9px}.series-results span{padding:4px 0;border-bottom:1px solid #25354a}
+
+.reboot-info{padding:8px 0;color:#91c4e8;font-size:9px;border-bottom:1px solid var(--line)}
