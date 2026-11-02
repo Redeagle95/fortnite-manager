@@ -196,7 +196,9 @@ describe("Battle Royale simulation", () => {
     match.userTeam.inventory.weapons = Array.from({length:5},(_,i)=>({id:"old-"+i,definitionId:"old-"+i,name:"Old weapon "+i,category:"ASSAULT_RIFLE" as const,rarity:"COMMON" as const,damage:20,magazine:30,ammo:30}));
     const drop = {id:"ground-weapon",kind:"WEAPON" as const,name:"New shotgun",definitionId:"pump-shotgun",category:"SHOTGUN" as const,rarity:"EPIC" as const,damage:100,quantity:1};
     match.lootOnGround.push(drop);
+    const phaseBeforePickup = match.phaseIndex;
     takeZoneAction(match,{type:"PICKUP_LOOT",dropId:drop.id,replaceWeaponId:"old-0"});
+    expect(match.phaseIndex).toBe(phaseBeforePickup);
     expect(match.userTeam.inventory.weapons[0].name).toBe("New shotgun");
     expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(false);
   });
