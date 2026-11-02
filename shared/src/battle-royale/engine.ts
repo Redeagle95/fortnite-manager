@@ -64,13 +64,19 @@ function isFinished(match: BattleMatch): boolean { return match.stage === "FINIS
 function updateCounts(match: BattleMatch): void {
   match.teamsRemaining = aliveTeams(match).length;
   match.playersRemaining = match.teams.reduce((sum, team) => sum + alivePlayers(team).length, 0);
-  if (!match.userTeam.alive) finishMatch(match, "ELIMINATED");
-  else if (match.teamsRemaining === 1 && match.userTeam.alive) finishMatch(match, "WIN");
+  // A team eliminated before the final winner is decided remains in spectator simulation.
+  // Keep its placement so the final result reflects the actual end of the Battle Royale.
+  if (!match.userTeam.alive && match.userTeam.placement === null) {
+    match.userTeam.placement = Math.max(2, match.teamsRemaining + 1);
+  }
+  if (match.teamsRemaining <= 1) {
+    finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+  }
 }
 function finishMatch(match: BattleMatch, result: "WIN" | "ELIMINATED"): void {
   if (match.stage === "FINISHED") return;
   match.stage = "FINISHED"; match.result = result; match.finishedAt = Date.now();
-  match.finalPlacement = result === "WIN" ? 1 : Math.max(1, match.teamsRemaining + 1);
+  match.finalPlacement = result === "WIN" ? 1 : (match.userTeam.placement ?? Math.max(2, match.teamsRemaining + 1));
   match.userTeam.placement = match.finalPlacement;
   const placement = match.finalPlacement;
   match.placementPoints = placement === 1 ? 65 : placement === 2 ? 55 : placement === 3 ? 48 : placement <= 5 ? 40 : placement <= 10 ? 30 : placement <= 15 ? 20 : placement <= 25 ? 10 : 0;
@@ -349,10 +355,16 @@ function applyStormDamage(match: BattleMatch, seconds = 1): void {
 
 function updateStormCircle(match: BattleMatch): void {
   if (match.mobileZoneActive && match.secondsUntilShrink <= 0 && match.secondsIntoShrink >= match.phases[5].shrinkSeconds) {
-    const t = match.gameTimeSeconds / 22;
-    const radius = match.storm.radius;
-    match.storm.x = clamp(5000 + Math.sin(t) * 430, radius, match.map.width - radius);
-    match.storm.y = clamp(5000 + Math.cos(t * 0.83) * 360, radius, match.map.height - radius);
+    // Zone 7 never stops: the safe circle follows a smooth, bounded path across the island.
+    // Its target is updated every simulated second so every squad can react to the movement.
+    const t = match.gameTimeSeconds / 34;
+    const radius = match.phases[5].radius;
+    const margin = radius + 180;
+    const nextX = 5000 + Math.sin(t) * 1250 + Math.sin(t * 0.47) * 420;
+    const nextY = 5000 + Math.cos(t * 0.79) * 1120 + Math.sin(t * 0.39) * 360;
+    match.storm.x = clamp(nextX, margin, match.map.width - margin);
+    match.storm.y = clamp(nextY, margin, match.map.height - margin);
+    match.storm.radius = radius;
     match.stormTarget = { ...match.storm };
     return;
   }
@@ -439,6 +451,27 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       x: Math.max(120, Math.min(mapWidth - 120, team.position.x + dx / distance * step + driftX)),
       y: Math.max(120, Math.min(mapHeight - 120, team.position.y + dy / distance * step + driftY)),
     };
+  }
+
+  // During the moving endgame every squad continually adjusts to the live circle.
+  // The user's squad moves too; the four Zone 7 choices remain combat-positioning styles,
+  // not extra action buttons for ordinary rotations.
+  if (match.mobileZoneActive && match.phaseIndex >= 6) {
+    const squads = match.teams.filter(team => team.alive);
+    for (const team of squads) {
+      const dx = match.storm.x - team.position.x;
+      const dy = match.storm.y - team.position.y;
+      const distance = Math.hypot(dx, dy);
+      const outside = !isInsideStorm(team.position.x, team.position.y, match.storm);
+      const desiredStep = outside ? 520 : distance > match.storm.radius * 0.55 ? 260 : 105;
+      if (distance > 35) {
+        const step = Math.min(distance, desiredStep);
+        team.position = {
+          x: Math.max(100, Math.min(mapWidth - 100, team.position.x + dx / distance * step)),
+          y: Math.max(100, Math.min(mapHeight - 100, team.position.y + dy / distance * step)),
+        };
+      }
+    }
   }
 
   // Supply drops appear in the mid-game at a safe POI and contain higher-rarity loot.
@@ -572,23 +605,19 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       break;
     }
     case "FIGHT_HEIGHT": {
-      const report = fight(match, random, "HEIGHT");
-      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      fight(match, random, "HEIGHT");
       break;
     }
     case "FIGHT_MID": {
-      const report = fight(match, random, "MID");
-      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      fight(match, random, "MID");
       break;
     }
     case "FIGHT_LOW": {
-      const report = fight(match, random, "LOW");
-      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      fight(match, random, "LOW");
       break;
     }
     case "FIGHT_OUTSIDE": {
-      const report = fight(match, random, "OUTSIDE");
-      if (match.phaseIndex >= 6 && !report.won) { match.userTeam.alive = false; for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player); }
+      fight(match, random, "OUTSIDE");
       break;
     }
     case "LOOT": {
@@ -747,7 +776,8 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
     // but keep the match alive until only one squad remains.
     updateCounts(match);
     if (!isFinished(match) && match.teamsRemaining <= 1) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
-    if (!isFinished(match) && !match.userTeam.alive) finishMatch(match, "ELIMINATED");
+    // If the user's squad has been eliminated, advanceMatchTime keeps simulating
+    // the remaining AI squads until the last team wins.
     return match;
   }
   const next = match.phases[match.phaseIndex];

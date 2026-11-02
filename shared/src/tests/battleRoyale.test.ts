@@ -190,6 +190,48 @@ describe("Battle Royale simulation", () => {
     advanceMatchTime(match, 20);
     expect(match.storm.x !== before.x || match.storm.y !== before.y).toBe(true);
   });
+  it("keeps Zone 7 active after the user's elimination until one team remains", () => {
+    const match = createBattleRoyale(9510, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.mobileZoneActive = true;
+    match.userTeam.alive = false;
+    for (const player of match.userTeam.players) player.alive = false;
+    const aliveBot = match.teams.find(team => !team.isUser && team.alive)!;
+    // Keep two bot squads alive so the match must continue in spectator mode.
+    const secondBot = match.teams.find(team => !team.isUser && team.id !== aliveBot.id)!;
+    aliveBot.alive = true;
+    secondBot.alive = true;
+    for (const team of match.teams) {
+      if (team.id !== aliveBot.id && team.id !== secondBot.id) {
+        team.alive = false;
+        for (const player of team.players) player.alive = false;
+      }
+    }
+    match.stage = "ZONE";
+    advanceMatchTime(match, 1);
+    expect(match.stage).toBe("ZONE");
+    expect(match.result).toBe(null);
+    expect(match.userTeam.placement).toBe(3);
+  });
+
+  it("keeps the four exclusive Zone 7 tactics while the user squad auto-rotates with the moving circle", () => {
+    const match = createBattleRoyale(9511, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.mobileZoneActive = true;
+    match.secondsUntilShrink = 0;
+    match.secondsIntoShrink = match.phases[5].shrinkSeconds;
+    match.storm = { x: 5000, y: 5000, radius: match.phases[5].radius };
+    match.stormTarget = { ...match.storm };
+    match.userTeam.position = { x: 900, y: 900 };
+    const choices = getActionOptions(match).map(action => action.type);
+    expect(choices).toEqual(["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE"]);
+    const before = { ...match.userTeam.position };
+    advanceMatchTime(match, 15);
+    expect(match.userTeam.position.x !== before.x || match.userTeam.position.y !== before.y).toBe(true);
+  });
+
   it("allows picking up ground loot and replacing a full weapon slot", () => {
     const match = createBattleRoyale(9105, "SOLO", "pine-woods");
     resolveDrop(match, { type: "LOOT" });
