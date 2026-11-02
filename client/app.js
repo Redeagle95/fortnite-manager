@@ -113,22 +113,21 @@ function actionsForZone(match) {
   return actions;
 }
 function renderActions(match) {
-  const actions = match.stage === "DROP" ? spawnActions : actionsForLocation(match);
-  $("decision-title").textContent = match.stage === "DROP" ? "Tu viens d'atterrir. Que fais-tu ?" : match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : `Phase ${match.phaseIndex + 1} · ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
-  $("decision-description").textContent = match.stage === "DROP" ? "Les adversaires présents sur ton spot peuvent contester ton loot." : match.stage === "FINISHED" ? `Classement final : #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s).` : "Les choix proposés s’adaptent au lieu où se trouve ton équipe.";
+  const actions = match.stage === "DROP" ? spawnActions : actionsForZone(match);
+  const zoneNumber = match.stage === "DROP" ? 1 : Math.min(5, match.phaseIndex + 1);
+  $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
+  $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : "Le pourcentage tient compte de ton équipement et de la position choisie.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
-  const preview = fightPreview(match);
   $("action-list").innerHTML = actions.map(a => {
-    const badge = a.type === "FIGHT"
-      ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>'
-      : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
-    const details = a.type === "FIGHT"
-      ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire estimé : ' + escapeHtml(preview.enemy) + '</small>'
-      : '';
+    const style = a.style || (a.type === "FIGHT_HEIGHT" ? "HEIGHT" : a.type === "FIGHT_MID" ? "MID" : a.type === "FIGHT_LOW" ? "LOW" : a.type === "FIGHT_OUTSIDE" ? "OUTSIDE" : undefined);
+    const isFight = ["FIGHT","FIGHT_THEN_ROTATE","FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"].includes(a.type);
+    const preview = isFight ? fightPreview(match, style) : null;
+    const badge = preview ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>' : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
+    const details = preview ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire : ' + escapeHtml(preview.enemy) + '</small>' : '';
     return '<button class="action-button" data-action="' + a.type + '"><span><b>' + a.label + '</b><small>' + a.description + '</small>' + details + '</span>' + badge + '</button>';
   }).join("");
   document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => match.stage === "DROP" ? sendSpawnAction(button.dataset.action) : sendZoneAction(button.dataset.action)));
-  $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" ? false : !actions.some(a => a.type === "ROTATE"));
+  $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" || !actions.some(a => a.type === "ROTATE" || a.type === "FIGHT_THEN_ROTATE"));
 }
 function equipmentIcon(id) {
   const safeId = /^[a-z0-9-]+$/.test(id || "") ? id : "ammo";
@@ -142,6 +141,9 @@ function renderTeam(team) {
   $("wood").textContent = team.resources.wood;
   $("stone").textContent = team.resources.stone;
   $("metal").textContent = team.resources.metal;
+  $("wood-bar").style.width = (team.resources.wood / 500 * 100) + "%";
+  $("stone-bar").style.width = (team.resources.stone / 500 * 100) + "%";
+  $("metal-bar").style.width = (team.resources.metal / 500 * 100) + "%";
   $("inventory-list").innerHTML = Array.from({ length: 5 }, (_, i) => {
     const weapon = team.inventory.weapons[i];
     return '<div class="inventory-slot"><span class="gear-name">' + (weapon ? equipmentIcon(weapon.definitionId) : equipmentIcon("empty-slot")) + '<span>' + (weapon ? escapeHtml(weapon.name) : "Slot vide") + '</span></span><b class="' + (weapon ? "rarity-" + weapon.rarity : "") + '">' + (weapon ? weapon.rarity : "—") + '</b></div>';
@@ -155,11 +157,11 @@ function renderMatch(match) {
   currentMatch = match;
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
-  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Choisis ton premier move" : `Zone ${Math.max(1, match.phaseIndex)}`;
+  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(5, match.phaseIndex + 1);
   $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
-  $("phase-number").textContent = match.stage === "DROP" ? "DROP" : match.stage === "FINISHED" ? "FIN" : match.phaseIndex + "/" + match.phases.length;
+  $("phase-number").textContent = match.stage === "DROP" ? "1/5" : match.stage === "FINISHED" ? "FIN" : Math.min(5, match.phaseIndex + 1) + "/5";
   renderMap(match);
   renderActions(match);
   renderTeam(match.userTeam);
