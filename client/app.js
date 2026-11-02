@@ -65,9 +65,11 @@ function renderMap(match) {
     nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (target.x / width * 100 - nextDiameter / 2) + "%;top:" + (target.y / height * 100 - nextDiameter / 2) + "%;";
     nextCircle.classList.remove("hidden");
   } else nextCircle.classList.add("hidden");
+  const supplyLocations = new Set((match.lootOnGround || []).filter(drop => drop.isSupplyDrop).map(drop => drop.locationId));
   const poiButtons = match.map.locations.map(location => {
     const isUser = location.id === match.currentLocationId;
-    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}</button>`;
+    const supplyTag = supplyLocations.has(location.id) ? " · 📦" : "";
+    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}${supplyTag}</button>`;
   }).join("");
   $("poi-layer").innerHTML = poiButtons;
   const markerLayer = $("team-marker-layer");
@@ -208,12 +210,12 @@ function renderTeam(team) {
   $("consumables-list").innerHTML = team.inventory.items.length ? team.inventory.items.map(item => '<div class="consumable-item">' + equipmentIcon(item.definitionId) + '<span>' + escapeHtml(item.name) + ' <b>×' + item.quantity + '</b></span><small class="rarity-' + item.rarity + '">' + item.rarity + '</small></div>').join("") : "Aucun consommable";
   const groundLoot = $("ground-loot");
   if (groundLoot) {
-    groundLoot.innerHTML = currentMatch && currentMatch.lootOnGround.length
-      ? currentMatch.lootOnGround.slice(0,12).map(drop => {
+    groundLoot.innerHTML = currentMatch && currentMatch.lootOnGround.filter(drop => !drop.locationId || drop.locationId === currentMatch.currentLocationId).length
+      ? currentMatch.lootOnGround.filter(drop => !drop.locationId || drop.locationId === currentMatch.currentLocationId).slice(0,12).map(drop => {
         const buttons = drop.kind === "WEAPON" && team.inventory.weapons.length >= team.inventory.maxWeaponSlots
           ? team.inventory.weapons.map(item => '<button class="loot-pickup" data-pickup="' + drop.id + '" data-replace-weapon="' + item.id + '">Remplacer ' + escapeHtml(item.name) + '</button>').join("")
           : '<button class="loot-pickup" data-pickup="' + drop.id + '">Ramasser</button>';
-        return '<div class="ground-loot-row"><span>' + escapeHtml(drop.name) + ' ×' + drop.quantity + ' <small class="rarity-' + drop.rarity + '">' + drop.rarity + '</small></span><div>' + buttons + '</div></div>';
+        return '<div class="ground-loot-row"><span>' + escapeHtml(drop.name) + ' ×' + drop.quantity + (drop.isSupplyDrop ? ' · 📦 RAVITAILLEMENT' : '') + ' <small class="rarity-' + drop.rarity + '">' + drop.rarity + '</small></span><div>' + buttons + '</div></div>';
       }).join("")
       : '<p class="empty-feed">Aucun objet au sol à proximité.</p>';
     groundLoot.querySelectorAll("[data-pickup]").forEach(button => button.addEventListener("click", () => sendZoneAction("PICKUP_LOOT", {dropId:button.dataset.pickup,replaceWeaponId:button.dataset.replaceWeapon||undefined})));
