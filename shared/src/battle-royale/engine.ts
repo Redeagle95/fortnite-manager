@@ -313,8 +313,10 @@ function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
   const weaponDamage = match.userTeam.inventory.weapons.reduce((sum, weapon) => sum + weapon.damage, 0) / Math.max(1, match.userTeam.inventory.weapons.length);
   let remaining = Math.round(Math.max(35, active.length * (25 + aim * 0.25 + weaponDamage * 0.18) + random.nextInt(0, 25)));
   let inflicted = 0;
+  let attackerIndex = 0;
   for (const target of activePlayers(enemy)) {
     if (remaining <= 0) break;
+    const attacker = active[attackerIndex++ % Math.max(1, active.length)];
     const shieldDamage = Math.min(target.shield, remaining);
     target.shield -= shieldDamage;
     remaining -= shieldDamage;
@@ -324,9 +326,11 @@ function farmSurgeTags(match: BattleMatch, random: SeededRandom): number {
     remaining -= healthDamage;
     actual += healthDamage;
     inflicted += actual;
+    if (attacker) attacker.damageDealt += actual;
     if (target.health <= 0) {
       eliminatePlayer(target);
-      event(match, "ELIMINATION", "Élimination", `Ton équipe élimine ${target.name} (${enemy.name}) après un tag de surge.`);
+      if (attacker) attacker.eliminations += 1;
+      event(match, "ELIMINATION", "Élimination", `${attacker?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${target.name} (${enemy.name}) après un tag de surge.`);
       match.userTeam.eliminations += 1;
     }
   }
