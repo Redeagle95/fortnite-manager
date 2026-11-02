@@ -135,13 +135,13 @@ function actionsForZone(match) {
   else if (match.phaseIndex === 2) actions = [
     {type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},
     {type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags pour atteindre le seuil de dégâts avant la storm surge.",risk:"MEDIUM"}
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags réels sur une équipe adverse pour atteindre le seuil de dégâts avant la storm surge.",risk:"MEDIUM"}
   ];
   else if (match.phaseIndex === 3) actions = [
     {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},
     {type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},
     {type:"REFRESH",label:"Refresh matériaux",description:"Compléter progressivement les ressources de l’équipe.",risk:"LOW"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants pour éviter les pulses de storm surge.",risk:"MEDIUM"}
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants aux adversaires pour éviter les pulses de storm surge.",risk:"MEDIUM"}
   ];
   else actions = [
     {type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},
@@ -219,7 +219,7 @@ function renderMatch(match) {
   const surgeStatus = match.stormSurgeActive ? "ACTIVE · dégâts toutes les 5 s" : match.phaseIndex >= 3 ? "SEUIL ATTEINT" : "PAS ENCORE ACTIVE";
   const secondsLeft = Math.max(0, match.secondsUntilShrink || 0);
   const activePhase = match.phases[Math.max(0, Math.min(match.phaseIndex - 1, match.phases.length - 1))];
-  $("surge-info").innerHTML = `<div class="location-stat"><span>Storm surge</span><b class="${match.stormSurgeActive ? "surge-danger" : ""}">${surgeStatus}</b></div><div class="surge-track"><i style="width:${surgePercent}%"></i></div><div class="location-stat"><span>Dégâts infligés / seuil</span><b>${match.userTeam.damageDealt || 0} / ${match.surgeThreshold || 0}</b></div><div class="location-stat"><span>DPS tempête hors zone</span><b>${activePhase.damagePerSecond} / seconde</b></div><div class="location-stat"><span>Pulse storm surge</span><b>25 dégâts / 5 s</b></div><div class="location-stat"><span>Dégâts tempête subis</span><b>${match.stormDamageTaken || 0}</b></div><div class="location-stat"><span>Dégâts surge subis</span><b>${match.surgeDamageTaken || 0}</b></div><div class="location-stat"><span>Avant fermeture</span><b>${secondsLeft > 0 ? secondsLeft + " s" : "Fermeture en cours"}</b></div>`;
+  $("surge-info").innerHTML = `<div class="location-stat"><span>Storm surge</span><b class="${match.stormSurgeActive ? "surge-danger" : ""}">${surgeStatus}</b></div><div class="surge-track"><i style="width:${surgePercent}%"></i></div><div class="location-stat"><span>Dégâts infligés / seuil</span><b>${match.userTeam.damageDealt || 0} / ${match.surgeThreshold || 0}</b></div><div class="location-stat"><span>DPS tempête hors zone</span><b>${activePhase.damagePerSecond} / seconde</b></div><div class="location-stat"><span>Pulse storm surge</span><b>25 dégâts / 5 s de jeu</b></div><div class="location-stat"><span>Horloge de simulation</span><b>5 s de jeu / 1 s réelle</b></div><div class="location-stat"><span>Dégâts tempête subis</span><b>${match.stormDamageTaken || 0}</b></div><div class="location-stat"><span>Dégâts surge subis</span><b>${match.surgeDamageTaken || 0}</b></div><div class="location-stat"><span>Avant fermeture (temps de jeu)</span><b>${secondsLeft > 0 ? secondsLeft + " s" : "Fermeture en cours"}</b></div>`;
 }
 socket.on("connect", () => { $("connection-dot").parentElement.classList.add("online"); $("connection-label").textContent = "Serveur connecté"; });
 socket.on("disconnect", () => { $("connection-dot").parentElement.classList.remove("online"); $("connection-label").textContent = "Déconnecté"; });
