@@ -301,7 +301,7 @@ export function advanceMatchTime(match: BattleMatch, gameSeconds = 5): BattleMat
     updateSurge(match);
     if (match.gameTimeSeconds % 15 === 0) {
       const random = new SeededRandom(match.seed + match.gameTimeSeconds * 31 + match.events.length * 7);
-      simulateWorldTick(match, random);
+      simulateWorldTick(match, random, 0.025);
     }
     updateCounts(match);
   }
@@ -314,7 +314,7 @@ function moveTeam(match: BattleMatch, location: MapLocation): void {
 }
 
 /** Simulates one world tick: enemy squads rotate and can meet/fight without player input. */
-function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
+function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterChance = 0.34): void {
   const enemies = match.teams.filter(team => !team.isUser && team.alive);
   const mapWidth = match.map.width;
   const mapHeight = match.map.height;
@@ -343,7 +343,7 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom): void {
       .filter(entry => entry.distance < 1050)
       .sort((a, b) => a.distance - b.distance);
     const encounter = opponents[0];
-    if (!encounter || random.next() > 0.34) continue;
+    if (!encounter || random.next() > encounterChance) continue;
 
     const rival = encounter.other;
     engaged.add(team.id);
