@@ -69,3 +69,12 @@ Knockdowns and revives remain active throughout the match: a downed teammate can
 
 
 Additional mechanics in this branch: one reboot token per teammate slot (usable before the final zone), POI-specific ground loot, mid-game supply drops with improved rarity odds, and a six-game FNCS-style points series stored in the browser.
+
+## Gameplay effects for team roles and IGL strategy
+
+- **IGL:** decision-making adds tactical fight odds; leadership reduces the chance of a dangerous rotation and improves safe-route selection.
+- **Fragger:** aim adds fight odds and team damage; bot teams with a Fragger are more willing to capitalize on encounters.
+- **Support:** teamwork increases healing and revive health (up to 50 HP), and reduces the chance of teammate losses during fights.
+- **Scout:** game sense improves weapon rarity rolls at loot locations and reduces rotation/ambush risk; bot Scouts value better loot locations.
+- Role lineup follows squad size: Solo = IGL; Duo = IGL + Fragger; Trio adds Support; Squad adds Scout.
+- The selected IGL strategy now also modifies the user's fight odds, damage and rotation risk. Bot teams retain their own independent strategies.

@@ -237,4 +237,65 @@ describe("Battle Royale simulation", () => {
     expect(getActionOptions(match).map(option => option.type)).toEqual(["FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"]);
   });
 
+  it("gives the IGL a measurable tactical and rotation advantage", () => {
+    const match = createBattleRoyale(9201, "DUO", "pine-woods");
+    const igl = match.userTeam.players[0];
+    const originalRole = igl.role;
+    igl.role = "SCOUT";
+    const withoutIgl = getFightProbability(match);
+    igl.role = originalRole;
+    const withIgl = getFightProbability(match);
+    expect(withIgl).toBeGreaterThan(withoutIgl);
+  });
+
+  it("gives the Fragger a measurable combat advantage", () => {
+    const match = createBattleRoyale(9202, "DUO", "pine-woods");
+    const fragger = match.userTeam.players[1];
+    fragger.role = "SUPPORT";
+    const withoutFragger = getFightProbability(match);
+    fragger.role = "FRAGGER";
+    const withFragger = getFightProbability(match);
+    expect(withFragger).toBeGreaterThan(withoutFragger);
+  });
+
+  it("makes Support improve healing and revive health", () => {
+    const match = createBattleRoyale(9203, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const support = match.userTeam.players.find(player => player.role === "SUPPORT")!;
+    support.skills.teamwork = 100;
+    const target = match.userTeam.players[1];
+    target.health = 40;
+    match.userTeam.inventory.items.push({definitionId:"test-medkit",name:"Medkit",rarity:"COMMON",quantity:1,kind:"HEAL",heal:40});
+    takeZoneAction(match, {type:"HEAL",itemDefinitionId:"test-medkit",playerId:target.id});
+    expect(target.health).toBe(90);
+    target.knocked = true;
+    target.health = 0;
+    takeZoneAction(match, {type:"REVIVE",playerId:target.id});
+    expect(target.health).toBe(50);
+    expect(target.knocked).toBe(false);
+  });
+
+  it("makes Scout improve average loot rarity over repeated drops", () => {
+    const rarityScore = {COMMON:1,UNCOMMON:2,RARE:3,EPIC:4,LEGENDARY:5,MYTHIC:6} as const;
+    let regularScore = 0;
+    let scoutScore = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const regular = createBattleRoyale(9300 + seed, "SQUAD", "pine-woods");
+      const scouted = createBattleRoyale(9300 + seed, "SQUAD", "pine-woods");
+      regular.userTeam.players[3].role = "SUPPORT";
+      scouted.userTeam.players[3].role = "SCOUT";
+      resolveDrop(regular, {type:"LOOT"});
+      resolveDrop(scouted, {type:"LOOT"});
+      regularScore += regular.userTeam.inventory.weapons.reduce((sum, weapon) => sum + rarityScore[weapon.rarity], 0);
+      scoutScore += scouted.userTeam.inventory.weapons.reduce((sum, weapon) => sum + rarityScore[weapon.rarity], 0);
+    }
+    expect(scoutScore).toBeGreaterThan(regularScore);
+  });
+
+  it("makes the selected team strategy change combat odds", () => {
+    const prudent = createBattleRoyale(9401, "DUO", "pine-woods", ["Prudents"], undefined, "PRUDENT");
+    const aggressive = createBattleRoyale(9401, "DUO", "pine-woods", ["Agressifs"], undefined, "AGGRESSIVE");
+    expect(getFightProbability(aggressive)).toBeGreaterThan(getFightProbability(prudent));
+  });
+
 });
