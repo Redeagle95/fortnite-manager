@@ -36,7 +36,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#ffb347", sky: "#f39a62", horizon: "#e76b4c",
     ground: "#477c54", water: "#269ba5", atmosphere: "Tropical · Volcanique · Futuriste",
     location: "Archipel des brumes", environment: "tropical",
-    description: "Une côte sauvage, des reliefs volcaniques et des vestiges d'une technologie oubliée."
+    description: "Une côte sauvage, des reliefs volcaniques et des vestiges d'une technologie oubliée.",
     backgroundCell: 0,
   },
   {
@@ -46,7 +46,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#62d8c2", sky: "#73c5d5", horizon: "#3d8d9d",
     ground: "#4b9b7a", water: "#247d9e", atmosphere: "Insulaire · Aquatique · Hivernal",
     location: "Les îles du renouveau", environment: "ocean",
-    description: "Un vaste archipel, des criques lumineuses et des sommets glacés à l'horizon."
+    description: "Un vaste archipel, des criques lumineuses et des sommets glacés à l'horizon.",
     backgroundCell: 1,
   },
   {
@@ -56,7 +56,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#b9f36b", sky: "#202d55", horizon: "#5749a8",
     ground: "#454c67", water: "#4c83b8", atmosphere: "Extraterrestre · Énergétique · Mystérieux",
     location: "Zone de contact", environment: "alien",
-    description: "Des structures inconnues émergent du sol tandis que des lumières parcourent le ciel."
+    description: "Des structures inconnues émergent du sol tandis que des lumières parcourent le ciel.",
     backgroundCell: 2,
   },
   {
@@ -66,7 +66,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#e58bff", sky: "#5a4c91", horizon: "#bb75bd",
     ground: "#8d719f", water: "#a5d4df", atmosphere: "Chromatique · Onirique · Médiéval",
     location: "Les terres changeantes", environment: "chrome",
-    description: "Une frontière irréelle où la pierre, les reflets et la végétation semblent changer de nature."
+    description: "Une frontière irréelle où la pierre, les reflets et la végétation semblent changer de nature.",
     backgroundCell: 3,
   },
   {
@@ -76,7 +76,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#b6e66b", sky: "#79b6a7", horizon: "#4d8974",
     ground: "#477d4d", water: "#378e8d", atmosphere: "Jungle · Ruines · Exploration",
     location: "La canopée oubliée", environment: "jungle",
-    description: "Une jungle dense, des ruines enfouies et des passages secrets sous la canopée."
+    description: "Une jungle dense, des ruines enfouies et des passages secrets sous la canopée.",
     backgroundCell: 4,
   },
   {
@@ -86,7 +86,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#ff9c4a", sky: "#d8875d", horizon: "#a94e37",
     ground: "#a96d43", water: "#557b80", atmosphere: "Méditerranéen · Désertique · Post-apocalyptique",
     location: "Les plaines du levant", environment: "wasteland",
-    description: "Des falaises chaudes, des routes oubliées et une citadelle dressée au milieu des dunes."
+    description: "Des falaises chaudes, des routes oubliées et une citadelle dressée au milieu des dunes.",
     backgroundCell: 5,
   },
   {
@@ -96,7 +96,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#ff70c8", sky: "#25264d", horizon: "#593e83",
     ground: "#34364f", water: "#2b7b91", atmosphere: "Urbain · Japonisant · Néon",
     location: "District des lanternes", environment: "neon",
-    description: "Une mégalopole verticale, des jardins suspendus et des enseignes qui percent la nuit."
+    description: "Une mégalopole verticale, des jardins suspendus et des enseignes qui percent la nuit.",
     backgroundCell: 6,
   },
   {
@@ -106,7 +106,7 @@ export const seasonRegistry: FortniteSeason[] = [
     accent: "#70c7ff", sky: "#537fba", horizon: "#263f76",
     ground: "#536c7b", water: "#3288ae", atmosphere: "Contemporain · Aérien · Évolutif",
     location: "L'archipel des hauteurs", environment: "future",
-    description: "Des îlots suspendus, des tours élancées et un ciel traversé par des courants lumineux."
+    description: "Des îlots suspendus, des tours élancées et un ciel traversé par des courants lumineux.",
     backgroundCell: 7,
   }
 ];

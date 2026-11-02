@@ -1,6 +1,5 @@
 import { useMemo, useRef } from "react";
-import { useLoader } from "@react-three/fiber";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { OrbitControls, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import type { FortniteSeason } from "./seasons/seasonRegistry";
@@ -87,9 +86,7 @@ function Scene({season,skin,victory,quality}:Props) {
     <pointLight position={[5,3,-4]} intensity={1.5} color={season.accent} distance={18}/>
     <hemisphereLight args={["#d7edff",season.ground,.55]}/>
     <Cloud position={[-8,5,-9]} speed={.1}/><Cloud position={[7,6,-11]} speed={.07}/><Cloud position={[1,4.4,-7]} speed={.15}/>
-    <Island season={season}/><Avatar skin={skin} victory={victory}/>
-    <mesh position={[0,-.12,1.2]} rotation={[-Math.PI/2,0,0]} receiveShadow><cylinderGeometry args={[1.55,1.75,.24,48]}/><meshStandardMaterial color="#1c2737" metalness={.72} roughness={.3}/></mesh>
-    <mesh position={[0,.02,1.2]} rotation={[-Math.PI/2,0,0]}><torusGeometry args={[1.58,.035,8,64]}/><meshBasicMaterial color={season.accent}/></mesh>
+    <Avatar skin={skin} victory={victory}/>
     <Sparkles count={particles} scale={[13,7,12]} size={quality==="high"?3:2} speed={.25} color={season.accent} opacity={.75}/>
     <OrbitControls enablePan={false} enableZoom={false} minPolarAngle={Math.PI/2.8} maxPolarAngle={Math.PI/2.05} minAzimuthAngle={-.72} maxAzimuthAngle={.72} target={[0,1.5,0]}/>
   </>;
