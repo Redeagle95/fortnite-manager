@@ -39,6 +39,7 @@ function event(match: BattleMatch, type: BattleEvent["type"], title: string, des
 }
 function alivePlayers(team: BattleTeam): BattlePlayer[] { return team.players.filter(p => p.alive); }
 function aliveTeams(match: BattleMatch): BattleTeam[] { return match.teams.filter(t => t.alive); }
+function isFinished(match: BattleMatch): boolean { return match.stage === "FINISHED"; }
 function updateCounts(match: BattleMatch): void {
   match.teamsRemaining = aliveTeams(match).length;
   match.playersRemaining = match.teams.reduce((sum, team) => sum + alivePlayers(team).length, 0);
@@ -279,7 +280,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!match.userTeam.alive) { updateCounts(match); return match; }
   const random = new SeededRandom(match.seed + 1000 + match.phaseIndex * 97 + match.events.length * 13);
   processAction(match, action, random);
-  if (match.stage === "FINISHED") return match;
+  if (isFinished(match)) return match;
   match.stage = "ZONE";
   if (match.phaseIndex >= match.phases.length) {
     const lastEnemy = match.teams.find(t => !t.isUser && t.alive);
@@ -289,7 +290,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
       else { for (const p of alivePlayers(lastEnemy)) eliminatePlayer(p); lastEnemy.alive = false; }
     }
     updateCounts(match);
-    if (match.stage !== "FINISHED") finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match)) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
     return match;
   }
   const next = match.phases[match.phaseIndex];
@@ -299,7 +300,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   applyStormDamage(match);
   match.phaseIndex += 1;
   updateCounts(match);
-  if (match.phaseIndex >= match.phases.length && match.stage !== "FINISHED") {
+  if (match.phaseIndex >= match.phases.length && !isFinished(match)) {
     const lastEnemy = match.teams.find(t => !t.isUser && t.alive);
     if (lastEnemy && match.userTeam.alive) {
       const report = fight(match, random);
@@ -307,7 +308,7 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
       else { for (const p of alivePlayers(lastEnemy)) eliminatePlayer(p); lastEnemy.alive = false; }
     }
     updateCounts(match);
-    if (match.stage !== "FINISHED") finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match)) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
   }
   return match;
 }
