@@ -22,6 +22,28 @@ function showToast(message) { $("toast").textContent = message; $("toast").class
 function updateRatingFields() {
   const count = modes[$("mode").value];
   $("ratings-fields").innerHTML = Array.from({ length: count }, (_, i) => `<label><span class="hidden">Note joueur ${i + 1}</span><input class="rating-input" type="number" min="0" max="100" value="${i === 0 ? 78 : 72}" aria-label="Note joueur ${i + 1}" data-rating></label>`).join("");
+  updateRolePreview();
+}
+function updateRolePreview() {
+  const count = modes[$("mode").value];
+  const roles = [
+    ["IGL", "Planifie les rotations : réduit le risque d'embuscade et améliore les décisions de combat."],
+    ["FRAGGER", "Augmente les chances de gagner les fights et les dégâts infligés."],
+    ["SUPPORT", "Renforce les soins, les réanimations et limite les pertes en combat."],
+    ["SCOUT", "Améliore la qualité du loot et réduit les risques lors des déplacements."],
+  ].slice(0, count);
+  $("role-impact-preview").innerHTML = '<div class="role-preview-heading">RÔLES DE TON ÉQUIPE <span>' + count + ' joueur(s)</span></div><div class="role-preview-grid">' + roles.map(([role, description], index) => '<div class="role-preview-card"><b>' + role + ' · Joueur ' + (index + 1) + '</b><span>' + description + '</span></div>').join("") + '</div>';
+  updateStrategyPreview();
+}
+function updateStrategyPreview() {
+  const descriptions = {
+    PRUDENT: "Privilégie les rotations sûres et la survie. Les combats sont moins favorables, mais les déplacements sont plus sécurisés.",
+    AGGRESSIVE: "Augmente les chances de réussite et les dégâts en combat, au prix de rotations plus risquées.",
+    STRATEGIC: "Approche équilibrée : petit bonus en combat et rotations mieux maîtrisées.",
+    OPPORTUNISTIC: "Devient plus dangereux contre les équipes affaiblies : bonus de réussite et de dégâts sur les cibles vulnérables."
+  };
+  const strategy = $("team-strategy").value;
+  $("strategy-impact").innerHTML = '<b>IMPACT DE LA STRATÉGIE</b><span>' + descriptions[strategy] + '</span>';
 }
 function fillLocations(locations) {
   $("drop-location").innerHTML = locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · Danger ${l.danger}/100</option>`).join("");
@@ -193,7 +215,8 @@ function equipmentIcon(id) {
 function renderTeam(team) {
   $("team-list").innerHTML = team.players.map(player => {
     const status = !player.alive ? "· ÉLIMINÉ" : player.knocked ? "· À TERRE" : "";
-    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) · ' + player.damageDealt + ' dégâts ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
+    const roleImpact = { IGL: "Rotations plus sûres · lecture tactique", FRAGGER: "Bonus de combat · dégâts augmentés", SUPPORT: "Soins et réanimations améliorés", SCOUT: "Loot amélioré · détection des risques" }[player.role];
+    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) · ' + player.damageDealt + ' dégâts ' + status + '</div><div class="role-impact-line">' + roleImpact + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
   }).join("");
   const rebootInfo = $("reboot-info");
   if (rebootInfo && currentMatch) rebootInfo.textContent = "Jetons de reboot : " + team.rebootTokens + " · Un mate éliminé peut revenir avant la zone finale.";
