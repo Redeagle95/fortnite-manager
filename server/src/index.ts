@@ -1,6 +1,6 @@
-
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { registerBattleRoyaleSocket } from "./battleRoyaleSocket";
 
 const httpServer = createServer();
 
@@ -21,6 +21,8 @@ io.on("connection", (socket) => {
     console.log(`Joueur déconnecté : ${socket.id}`);
   });
 });
+
+registerBattleRoyaleSocket(io);
 
 const PORT = 3000;
 
