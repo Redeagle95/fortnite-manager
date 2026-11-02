@@ -149,4 +149,43 @@ describe("Battle Royale simulation", () => {
     expect(getActionOptions(match).map(action => action.type)).not.toContain("FARM_FULL");
   });
 
+  it("applies the chosen IGL strategy and assigns squad roles", () => {
+    const match = createBattleRoyale(9101, "SQUAD", "pine-woods", ["Equipe test"], [80, 75, 70, 65], "AGGRESSIVE");
+    expect(match.userTeam.strategy).toBe("AGGRESSIVE");
+    expect(match.userTeam.players.map(player => player.role)).toEqual(["IGL", "FRAGGER", "SUPPORT", "SCOUT"]);
+  });
+
+  it("awards placement and elimination points when the match ends", () => {
+    const match = createBattleRoyale(9102, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.eliminations = 3;
+    for (const team of match.teams) if (!team.isUser) { team.alive = false; for (const player of team.players) player.alive = false; }
+    match.stage = "ZONE";
+    match.phaseIndex = 6;
+    takeZoneAction(match, { type: "FIGHT_HEIGHT" });
+    expect(match.stage).toBe("FINISHED");
+    expect(match.placementPoints).toBe(65);
+    expect(match.eliminationPoints).toBe(6);
+    expect(match.totalPoints).toBe(71);
+  });
+
+  it("offers focus-fire, boxfight, disengage, healing and hold-position choices", () => {
+    const match = createBattleRoyale(9103, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 4;
+    match.userTeam.inventory.items.push({definitionId:"small-shield",name:"Mini potion",rarity:"UNCOMMON",quantity:2,kind:"HEAL",shield:25});
+    expect(getActionOptions(match).map(option => option.type)).toEqual(expect.arrayContaining(["FOCUS_FIRE","BOXFIGHT","DISENGAGE","HEAL","HOLD_POSITION"]));
+  });
+
+  it("moves the final safe zone during endgame", () => {
+    const match = createBattleRoyale(9104, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.mobileZoneActive = true;
+    match.secondsIntoShrink = match.phases[5].shrinkSeconds;
+    match.secondsUntilShrink = 0;
+    const before = {...match.storm};
+    advanceMatchTime(match, 20);
+    expect(match.storm.x !== before.x || match.storm.y !== before.y).toBe(true);
+  });
 });
