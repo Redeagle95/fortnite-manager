@@ -65,10 +65,16 @@ function renderMap(match) {
     nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (storm.x / width * 100 - nextDiameter / 2) + "%;top:" + (storm.y / height * 100 - nextDiameter / 2) + "%;";
     nextCircle.classList.remove("hidden");
   } else nextCircle.classList.add("hidden");
-  $("poi-layer").innerHTML = match.map.locations.map(location => {
+  const poiButtons = match.map.locations.map(location => {
     const isUser = location.id === match.currentLocationId;
     return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}</button>`;
   }).join("");
+  const teamMarkers = match.teams.filter(team => team.alive).map(team => {
+    const alive = team.players.filter(player => player.alive).length;
+    const label = team.isUser ? "V" : String(alive);
+    return `<span class="team-marker ${team.isUser ? "user" : "opponent"}" style="left:${team.position.x / width * 100}%;top:${team.position.y / height * 100}%" title="${escapeHtml(team.name)} · ${alive} joueur(s) vivant(s)">${label}</span>`;
+  }).join("");
+  $("poi-layer").innerHTML = poiButtons + teamMarkers;
   document.querySelectorAll("[data-poi]").forEach(button => button.addEventListener("click", () => {
     if (match.stage === "DROP") {
       $("drop-location").value = button.dataset.poi;
@@ -154,6 +160,10 @@ function renderTeam(team) {
 }
 function renderEvents(events) {
   $("event-log").innerHTML = events.slice(0, 8).map(item => `<div class="event-row"><b>${escapeHtml(item.title)}</b><p>${escapeHtml(item.description)}</p></div>`).join("");
+  const eliminations = events.filter(item => item.type === "ELIMINATION").slice(0, 20);
+  $("elimination-feed").innerHTML = eliminations.length
+    ? eliminations.map(item => `<div class="elimination-row"><b>${escapeHtml(item.description)}</b><small>Zone ${Math.min(5, item.phase + 1)} · ${new Date(item.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>`).join("")
+    : '<p class="empty-feed">Aucune élimination pour le moment. Les affrontements entre équipes apparaîtront ici.</p>';
 }
 function renderMatch(match) {
   currentMatch = match;
