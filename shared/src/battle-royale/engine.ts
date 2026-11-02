@@ -753,9 +753,9 @@ export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; 
   const canReboot = match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && activePlayers(match.userTeam).length > 0 && match.userTeam.players.some(player => !player.alive && !player.rebooted);
   if (canReboot) options.push({ type: "REBOOT", label: "Reboot un mate éliminé", description: "Un jeton disponible permet de faire revenir un joueur avant le dernier cercle.", risk: "MEDIUM" });
   const canRevive = match.userTeam.players.some(player => player.alive && player.knocked) && activePlayers(match.userTeam).length > 0;
-  if (canRevive) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV.", risk: "MEDIUM" });
+  if (canRevive && match.phaseIndex < 6) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV.", risk: "MEDIUM" });
   const needsHealing = match.userTeam.players.some(player => player.alive && !player.knocked && (player.health < 100 || player.shield < 100));
-  if (needsHealing && match.userTeam.inventory.items.some(item => item.kind === "HEAL" && item.quantity > 0)) options.push({ type: "HEAL", label: "Utiliser un soin", description: "Soigner le joueur le plus affaibli.", risk: "LOW" });
+  if (needsHealing && match.phaseIndex < 6 && match.userTeam.inventory.items.some(item => item.kind === "HEAL" && item.quantity > 0)) options.push({ type: "HEAL", label: "Utiliser un soin", description: "Soigner le joueur le plus affaibli.", risk: "LOW" });
   if (match.phaseIndex >= 3 && match.phaseIndex < 6) options.push({ type: "HOLD_POSITION", label: "Construire une position défensive", description: "Dépenser 10 matériaux pour sécuriser la position.", risk: "LOW" });
   return options;
 }
