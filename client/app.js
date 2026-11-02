@@ -68,10 +68,6 @@ function sendSpawnAction(type) {
 function sendZoneAction(type, extra = {}) {
   const action = { type, ...extra };
   if (type === "ROTATE" || type === "FIGHT_THEN_ROTATE") action.locationId = $("rotation-location").value;
-  if (type === "HEAL") {
-    const heal = currentMatch.userTeam.inventory.items.find(item => item.kind === "HEAL");
-    if (heal) action.itemDefinitionId = heal.definitionId;
-  }
   socket.emit("battle:action", { matchId: currentMatch.id, action });
 }
 function renderMap(match) {
@@ -136,7 +132,7 @@ function estimateTeamPower(team, style) {
   const weaponBonus = scores.length ? Math.min(15,scores.reduce((a,b)=>a+b,0)/scores.length*.12 + (style === "OUTSIDE" ? Math.min(5,utility*1.5) : 0)) : 0;
   return skill * .65 + gear * .2 + health * .1 + buildBonus * .05 + weaponBonus;
 }
-function fightPreview(match, style) {
+function fightPreview(match, style, actionType) {
   const enemies = match.teams.filter(t => !t.isUser && t.alive && (match.stage !== "DROP" || t.dropLocationId === match.selectedDropId));
   if (!enemies.length) return { chance: 100, enemy: "Aucun adversaire sur ce spot" };
   const sameSpot = enemies.filter(t => t.dropLocationId === match.currentLocationId);
@@ -145,7 +141,9 @@ function fightPreview(match, style) {
   const enemy = pool[0];
   const positioning = style === "HEIGHT" ? 7 : style === "MID" ? 3 : style === "LOW" ? 1 : style === "OUTSIDE" ? -2 : 0;
   const builds = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
-  const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam, style) - estimateTeamPower(enemy)) * .72 + positioning + builds));
+  const focusBonus = actionType === "FOCUS_FIRE" ? 7 : 0;
+  const boxBonus = actionType === "BOXFIGHT" ? (match.userTeam.players.filter(player => player.alive && !player.knocked).reduce((sum, player) => sum + player.skills.building, 0) / Math.max(1, match.userTeam.players.filter(player => player.alive && !player.knocked).length)) * .06 + (match.userTeam.inventory.weapons.some(weapon => weapon.category === "SHOTGUN") ? 5 : -2) : 0;
+  const chance = Math.max(5, Math.min(95, 50 + (estimateTeamPower(match.userTeam, style) - estimateTeamPower(enemy)) * .72 + positioning + builds + focusBonus + boxBonus));
   return { chance: Math.round(chance), enemy: enemy.name };
 }
 function actionsForZone(match) {
@@ -195,17 +193,34 @@ function renderActions(match) {
   $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
   $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
-  $("action-list").innerHTML = actions.map(a => {
+  const hasFocusAction = actions.some(action => action.type === "FOCUS_FIRE");
+  let focusTargetPicker = "";
+  if (hasFocusAction) {
+    const enemies = match.teams.filter(team => !team.isUser && team.alive);
+    const samePoi = enemies.filter(team => team.dropLocationId === match.currentLocationId);
+    const pool = (samePoi.length ? samePoi : enemies).sort((a, b) => Math.hypot(a.position.x - match.userTeam.position.x, a.position.y - match.userTeam.position.y) - Math.hypot(b.position.x - match.userTeam.position.x, b.position.y - match.userTeam.position.y));
+    const targetTeam = pool[0];
+    const targets = targetTeam ? targetTeam.players.filter(player => player.alive && !player.knocked) : [];
+    if (targetTeam && targets.length) {
+      targets.sort((a, b) => (a.health + a.shield) - (b.health + b.shield));
+      focusTargetPicker = '<label class="focus-target-picker">Cible prioritaire · ' + escapeHtml(targetTeam.name) + '<select id="focus-target">' + targets.map(player => '<option value="' + player.id + '">' + escapeHtml(player.name) + ' · ' + (player.health + player.shield) + ' PV/bouclier</option>').join("") + '</select></label>';
+    }
+  }
+  $("action-list").innerHTML = focusTargetPicker + actions.map(a => {
     const style = a.style || (a.type === "FIGHT_HEIGHT" ? "HEIGHT" : a.type === "FIGHT_MID" ? "MID" : a.type === "FIGHT_LOW" ? "LOW" : a.type === "FIGHT_OUTSIDE" ? "OUTSIDE" : undefined);
-    const isFight = ["FIGHT","FIGHT_THEN_ROTATE","FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"].includes(a.type);
-    const preview = isFight ? fightPreview(match, style) : null;
+    const isFight = ["FIGHT","FIGHT_THEN_ROTATE","FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE","FOCUS_FIRE","BOXFIGHT"].includes(a.type);
+    const preview = isFight ? fightPreview(match, style, a.type) : null;
     const isSurge = a.type === "FARM_SURGE";
     const surgeProgress = Math.min(100, Math.round((match.userTeam.damageDealt || 0) / Math.max(1, match.surgeThreshold || 1) * 100));
     const badge = preview ? '<span class="fight-odds"><b>' + preview.chance + '%</b><small>chance estimée</small></span>' : isSurge ? '<span class="fight-odds"><b>' + surgeProgress + '%</b><small>seuil surge</small></span>' : '<span class="risk ' + a.risk + '">' + riskLabels[a.risk] + '</span>';
     const details = preview ? '<span class="odds-track"><i style="width:' + preview.chance + '%"></i></span><small>Adversaire : ' + escapeHtml(preview.enemy) + '</small>' : isSurge ? '<span class="odds-track"><i style="width:' + surgeProgress + '%"></i></span><small>Dégâts : ' + (match.userTeam.damageDealt || 0) + ' / ' + (match.surgeThreshold || 0) + '</small>' : '';
     return '<button class="action-button" data-action="' + a.type + '"><span><b>' + a.label + '</b><small>' + a.description + '</small>' + details + '</span>' + badge + '</button>';
   }).join("");
-  document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => match.stage === "DROP" ? sendSpawnAction(button.dataset.action) : sendZoneAction(button.dataset.action)));
+  document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => {
+    if (match.stage === "DROP") return sendSpawnAction(button.dataset.action);
+    const extra = button.dataset.action === "FOCUS_FIRE" && $("focus-target") ? { targetPlayerId: $("focus-target").value } : {};
+    sendZoneAction(button.dataset.action, extra);
+  }));
   $("rotation-picker").classList.toggle("hidden", match.stage === "DROP" || !actions.some(a => a.type === "ROTATE" || a.type === "FIGHT_THEN_ROTATE"));
 }
 function equipmentIcon(id) {
@@ -213,7 +228,10 @@ function equipmentIcon(id) {
   return '<svg class="equipment-icon" viewBox="0 0 64 64" aria-hidden="true"><use href="/assets/equipment.svg#' + safeId + '"></use></svg>';
 }
 function renderTeam(team) {
-  $("team-list").innerHTML = team.players.map(player => {
+  const teamDamage = team.players.reduce((sum, player) => sum + (player.damageDealt || 0), 0);
+  const teamEliminations = team.players.reduce((sum, player) => sum + (player.eliminations || 0), 0);
+  const combatSummary = '<div class="team-combat-summary"><span>Dégâts totaux</span><b>' + teamDamage + '</b><span>Éliminations individuelles</span><b>' + teamEliminations + '</b></div>';
+  $("team-list").innerHTML = combatSummary + team.players.map(player => {
     const status = !player.alive ? "· ÉLIMINÉ" : player.knocked ? "· À TERRE" : "";
     const roleImpact = { IGL: "Rotations plus sûres · lecture tactique", FRAGGER: "Bonus de combat · dégâts augmentés", SUPPORT: "Soins et réanimations améliorés", SCOUT: "Loot amélioré · détection des risques" }[player.role];
     return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) · ' + player.damageDealt + ' dégâts ' + status + '</div><div class="role-impact-line">' + roleImpact + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
