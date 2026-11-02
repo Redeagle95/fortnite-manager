@@ -6,9 +6,11 @@ on:
       - feat/battle-royale-gameplay
       - feat/battle-royale-tactical-actions
       - feat/battle-royale-five-zone-strategy
+      - feat/live-world-simulation-killfeed
   pull_request:
     branches:
       - main
+      - feat/battle-royale-five-zone-strategy
 
 jobs:
   test-and-build:

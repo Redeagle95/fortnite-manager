@@ -36,8 +36,8 @@
       <div class="game-layout">
         <section class="map-card">
           <div class="map-topline"><span>CARTE TACTIQUE</span><span id="zone-label">ZONE INITIALE</span></div>
-          <div id="battle-map" class="battle-map"><div class="island"></div><div id="storm-circle" class="storm-circle"></div><div id="next-storm-circle" class="next-storm-circle"></div><div id="poi-layer"></div><div class="map-compass">N ↑</div></div>
-          <div class="map-legend"><span><i class="legend-user"></i> Ton équipe</span><span><i class="legend-poi"></i> Lieux</span><span><i class="legend-storm"></i> Tempête</span></div>
+          <div id="battle-map" class="battle-map"><div class="island"></div><div id="storm-circle" class="storm-circle"></div><div id="next-storm-circle" class="next-storm-circle"></div><div id="poi-layer"></div><div id="team-marker-layer"></div><div class="map-compass">N ↑</div></div>
+          <div class="map-legend"><span><i class="legend-user"></i> Ton équipe</span><span><i class="legend-opponent"></i> Équipes adverses</span><span><i class="legend-poi"></i> Lieux</span><span><i class="legend-storm"></i> Tempête</span></div>
         </section>
         <aside class="side-panel">
           <section class="decision-card"><div class="card-kicker">DÉCISION SUIVANTE</div><h2 id="decision-title">Où veux-tu atterrir ?</h2><p id="decision-description">Analyse le danger et le potentiel de loot de ton spot.</p><div id="action-list" class="action-list"></div></section>
@@ -47,6 +47,7 @@
       </div>
       <section class="bottom-grid">
         <div class="log-card"><div class="card-kicker">JOURNAL DE PARTIE</div><div id="event-log"></div></div>
+        <div class="elimination-card"><div class="card-kicker">FIL DES ÉLIMINATIONS</div><div id="elimination-feed"></div></div>
         <div class="map-info-card"><div class="card-kicker">ZONE & POSITION</div><div id="location-info"></div><div id="rotation-picker" class="rotation-picker hidden"><label>Destination<select id="rotation-location"></select></label></div></div>
       </section>
       <button id="new-match" class="text-button">↻ Nouvelle partie</button>

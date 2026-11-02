@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { createBattleRoyale, getActionOptions, getFightProbability, getInventorySummary, resolveDrop, takeZoneAction } from "../battle-royale";
 
 describe("Battle Royale simulation", () => {
+  it("moves enemy squads on the map as the match advances", () => {
+    const match = createBattleRoyale(4242, "DUO", "pine-woods");
+    const before = match.teams.filter(team => !team.isUser).map(team => ({ id: team.id, x: team.position.x, y: team.position.y }));
+    resolveDrop(match, { type: "LOOT" });
+    const moved = before.some(position => {
+      const team = match.teams.find(candidate => candidate.id === position.id)!;
+      return team.position.x !== position.x || team.position.y !== position.y;
+    });
+    expect(moved).toBe(true);
+  });
+
   it("creates a full lobby and offers spawn decisions", () => {
     const match = createBattleRoyale(42, "TRIO", "tilted-district");
     expect(match.teams).toHaveLength(33);
