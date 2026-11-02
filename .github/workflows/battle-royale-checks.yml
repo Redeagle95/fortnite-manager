@@ -9,11 +9,13 @@ on:
       - feat/live-storm-surge-farming
       - feat/live-world-simulation-killfeed
       - feat/extended-zones-team-kill-counters
+      - feat/deep-competitive-gameplay
   pull_request:
     branches:
       - main
       - feat/battle-royale-five-zone-strategy
       - feat/live-storm-surge-farming
+      - feat/deep-competitive-gameplay
 
 jobs:
   test-and-build:

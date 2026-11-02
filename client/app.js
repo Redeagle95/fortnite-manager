@@ -36,15 +36,15 @@ function fillLocations(locations) {
 }
 function startMatch() {
   const ratings = [...document.querySelectorAll("[data-rating]")].map(input => Math.max(0, Math.min(100, Number(input.value) || 0)));
-  socket.emit("battle:create", { seed: Number($("seed").value) || Date.now(), mode: $("mode").value, dropLocationId: $("drop-location").value, playerRatings: ratings });
+  socket.emit("battle:create", { seed: Number($("seed").value) || Date.now(), mode: $("mode").value, dropLocationId: $("drop-location").value, playerRatings: ratings, strategy: $("team-strategy").value });
 }
 function sendSpawnAction(type) {
   const payload = { matchId: currentMatch.id, action: type };
   if (type === "ROTATE") payload.locationId = $("rotation-location").value;
   socket.emit("battle:drop", payload);
 }
-function sendZoneAction(type) {
-  const action = { type };
+function sendZoneAction(type, extra = {}) {
+  const action = { type, ...extra };
   if (type === "ROTATE" || type === "FIGHT_THEN_ROTATE") action.locationId = $("rotation-location").value;
   if (type === "HEAL") {
     const heal = currentMatch.userTeam.inventory.items.find(item => item.kind === "HEAL");
@@ -65,9 +65,11 @@ function renderMap(match) {
     nextCircle.style.cssText = "width:" + nextDiameter + "%;height:" + nextDiameter + "%;left:" + (target.x / width * 100 - nextDiameter / 2) + "%;top:" + (target.y / height * 100 - nextDiameter / 2) + "%;";
     nextCircle.classList.remove("hidden");
   } else nextCircle.classList.add("hidden");
+  const supplyLocations = new Set((match.lootOnGround || []).filter(drop => drop.isSupplyDrop).map(drop => drop.locationId));
   const poiButtons = match.map.locations.map(location => {
     const isUser = location.id === match.currentLocationId;
-    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}</button>`;
+    const supplyTag = supplyLocations.has(location.id) ? " · 📦" : "";
+    return `<button class="poi ${isUser ? "user-location" : ""} ${location.id === match.selectedDropId ? "selected" : ""}" style="left:${location.x / width * 100}%;top:${location.y / height * 100}%" data-poi="${location.id}" title="Loot ${location.lootQuality}/100 · Danger ${location.danger}/100">${escapeHtml(location.name)}${supplyTag}</button>`;
   }).join("");
   $("poi-layer").innerHTML = poiButtons;
   const markerLayer = $("team-marker-layer");
@@ -127,35 +129,42 @@ function fightPreview(match, style) {
 function actionsForZone(match) {
   let actions;
   if (match.phaseIndex === 1) actions = [
-    {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer la force, la vie et le stuff des deux équipes.",risk:"HIGH"},
-    {type:"FARM_FULL",label:"Farm complet · 500/500",description:"Récolter directement 500 bois, 500 pierre et 500 métal.",risk:"LOW"},
-    {type:"FARM_HALF_ROTATE",label:"Farm à moitié puis rotate",description:"Atteindre 250 de chaque matériau puis partir plus tôt vers la zone.",risk:"LOW"},
-    {type:"FARM_SURGE",label:"Prendre des tags pour la surge",description:"Infliger des dégâts à distance sans chercher l'élimination.",risk:"MEDIUM"}
+    {type:"LOOT",label:"Explorer le spot et ouvrir les coffres",description:"Récupérer armes, soins, munitions et matériaux selon la qualité du lieu.",risk:"LOW"},
+    {type:"FIGHT",label:"Prendre un fight",description:"Engager une équipe contestataire.",risk:"HIGH"},
+    {type:"FARM_FULL",label:"Farm complet · 500/500",description:"Récolter 500 bois, pierre et métal.",risk:"LOW"},
+    {type:"FARM_HALF_ROTATE",label:"Farm à moitié puis rotate",description:"Atteindre 250 de chaque matériau puis partir.",risk:"LOW"},
+    {type:"FARM_SURGE",label:"Prendre des tags pour la surge",description:"Infliger des dégâts pour augmenter le score de surge.",risk:"MEDIUM"}
   ];
   else if (match.phaseIndex === 2) actions = [
-    {type:"ROTATE",label:"Lancer la rotation maintenant",description:"Rejoindre la prochaine zone avant la tempête.",risk:"LOW"},
-    {type:"FIGHT_THEN_ROTATE",label:"Prendre un fight puis rotate",description:"Engager une équipe avant de rejoindre le prochain cercle.",risk:"HIGH"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags réels sur une équipe adverse pour atteindre le seuil.",risk:"MEDIUM"}
+    {type:"ROTATE",label:"Rotation sécurisée",description:"Rejoindre le prochain cercle.",risk:"LOW"},
+    {type:"FIGHT_THEN_ROTATE",label:"Fight puis rotation",description:"Prendre un combat avant de partir.",risk:"HIGH"},
+    {type:"DISENGAGE",label:"Éviter le combat et se replacer",description:"Privilégier un trajet moins dangereux vers la zone.",risk:"LOW"},
+    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre des tags pour atteindre le seuil.",risk:"MEDIUM"}
   ];
   else if (match.phaseIndex === 3) actions = [
-    {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l’équipement adverse.",risk:"HIGH"},
-    {type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l’avance sur la tempête.",risk:"MEDIUM"},
-    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter progressivement les ressources de l’équipe.",risk:"LOW"},
+    {type:"FOCUS_FIRE",label:"Focus une équipe",description:"Concentrer les tirs sur une cible prioritaire : le travail d'équipe et la visée comptent.",risk:"HIGH"},
+    {type:"FIGHT",label:"Prendre un fight sur la rotation",description:"Comparer les notes, les PV, les boucliers et l'équipement adverse.",risk:"HIGH"},
+    {type:"ROTATE",label:"Avancer vers la prochaine zone",description:"Prendre de l'avance sur la tempête.",risk:"MEDIUM"},
+    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter progressivement les ressources.",risk:"LOW"},
     {type:"FARM_SURGE",label:"Farmer la surge",description:"Infliger les dégâts manquants aux adversaires.",risk:"MEDIUM"}
   ];
   else if (match.phaseIndex === 4 || match.phaseIndex === 5) actions = [
-    {type:"FIGHT",label:"Prendre un fight contrôlé",description:"Tenter une élimination avant le dernier cercle.",risk:"HIGH"},
+    {type:"FOCUS_FIRE",label:"Focus une équipe",description:"Chercher une élimination rapide avant que les équipes se regroupent.",risk:"HIGH"},
+    {type:"BOXFIGHT",label:"Prendre un boxfight",description:"Le build, le placement et les pompes influencent le combat rapproché.",risk:"HIGH"},
     {type:"ROTATE",label:"Prendre une bonne position",description:"Rejoindre le prochain cercle et sécuriser une position jouable.",risk:"MEDIUM"},
-    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter les ressources avant le dernier cercle.",risk:"LOW"},
-    {type:"FARM_SURGE",label:"Farmer la surge",description:"Prendre les derniers tags nécessaires pour atteindre le seuil.",risk:"MEDIUM"}
+    {type:"DISENGAGE",label:"Se désengager",description:"Quitter un combat défavorable pour survivre.",risk:"LOW"},
+    {type:"REFRESH",label:"Refresh matériaux",description:"Compléter les ressources avant le dernier cercle.",risk:"LOW"}
   ];
   else actions = [
     {type:"FIGHT_HEIGHT",label:"Prendre la hauteur",description:"Synergie renforcée avec fusils d’assaut et snipers.",risk:"HIGH",style:"HEIGHT"},
     {type:"FIGHT_MID",label:"Jouer au milieu",description:"Synergie renforcée avec les pompes.",risk:"HIGH",style:"MID"},
     {type:"FIGHT_LOW",label:"Jouer en bas",description:"Synergie renforcée avec les SMG et pompes.",risk:"HIGH",style:"LOW"},
-    {type:"FIGHT_OUTSIDE",label:"Jouer hors zone",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}
+    {type:"FIGHT_OUTSIDE",label:"Jouer extérieur",description:"Synergie avec les armes à distance et objets utilitaires.",risk:"HIGH",style:"OUTSIDE"}
   ];
-  if (match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV. Au moins un joueur doit rester actif.",risk:"MEDIUM"});
+  if (match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && match.userTeam.players.some(p=>!p.alive&&!p.rebooted) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REBOOT",label:"Reboot un mate éliminé",description:"Faire revenir un joueur avec 100 PV grâce à un jeton de reboot.",risk:"MEDIUM"});
+  if (match.phaseIndex < 6 && match.userTeam.players.some(p=>p.alive&&p.knocked) && match.userTeam.players.some(p=>p.alive&&!p.knocked)) actions.unshift({type:"REVIVE",label:"Réanimer un équipier",description:"Le mate revient avec 30 PV.",risk:"MEDIUM"});
+  if (match.phaseIndex < 6 && match.userTeam.inventory.items.some(item=>item.kind==="HEAL"&&item.quantity>0) && match.userTeam.players.some(p=>p.alive&&!p.knocked&&(p.health<100||p.shield<100))) actions.unshift({type:"HEAL",label:"Utiliser un soin",description:"Soigner le joueur le plus affaibli avec un consommable disponible.",risk:"LOW"});
+  if (match.phaseIndex >= 3 && match.phaseIndex < 6) actions.push({type:"HOLD_POSITION",label:"Construire une position défensive",description:"Dépenser 10 matériaux pour sécuriser temporairement la position.",risk:"LOW"});
   return actions;
 }
 function renderActions(match) {
@@ -184,8 +193,10 @@ function equipmentIcon(id) {
 function renderTeam(team) {
   $("team-list").innerHTML = team.players.map(player => {
     const status = !player.alive ? "· ÉLIMINÉ" : player.knocked ? "· À TERRE" : "";
-    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
+    return '<div class="team-player"><div><div class="player-name">' + escapeHtml(player.name) + ' · ' + player.role + ' · ' + player.eliminations + ' kill(s) · ' + player.damageDealt + ' dégâts ' + status + '</div><div class="health-line"><div class="health-fill ' + (player.knocked ? "downed" : "") + '" style="width:' + player.health + '%"></div></div></div><div class="player-rating">' + player.skills.overall + '</div></div>';
   }).join("");
+  const rebootInfo = $("reboot-info");
+  if (rebootInfo && currentMatch) rebootInfo.textContent = "Jetons de reboot : " + team.rebootTokens + " · Un mate éliminé peut revenir avant la zone finale.";
   $("wood").textContent = team.resources.wood;
   $("stone").textContent = team.resources.stone;
   $("metal").textContent = team.resources.metal;
@@ -197,6 +208,18 @@ function renderTeam(team) {
     return '<div class="inventory-slot"><span class="gear-name">' + (weapon ? equipmentIcon(weapon.definitionId) : equipmentIcon("empty-slot")) + '<span>' + (weapon ? escapeHtml(weapon.name) : "Slot vide") + '</span></span><b class="' + (weapon ? "rarity-" + weapon.rarity : "") + '">' + (weapon ? weapon.rarity : "—") + '</b></div>';
   }).join("");
   $("consumables-list").innerHTML = team.inventory.items.length ? team.inventory.items.map(item => '<div class="consumable-item">' + equipmentIcon(item.definitionId) + '<span>' + escapeHtml(item.name) + ' <b>×' + item.quantity + '</b></span><small class="rarity-' + item.rarity + '">' + item.rarity + '</small></div>').join("") : "Aucun consommable";
+  const groundLoot = $("ground-loot");
+  if (groundLoot) {
+    groundLoot.innerHTML = currentMatch && currentMatch.lootOnGround.filter(drop => !drop.locationId || drop.locationId === currentMatch.currentLocationId).length
+      ? currentMatch.lootOnGround.filter(drop => !drop.locationId || drop.locationId === currentMatch.currentLocationId).slice(0,12).map(drop => {
+        const buttons = drop.kind === "WEAPON" && team.inventory.weapons.length >= team.inventory.maxWeaponSlots
+          ? team.inventory.weapons.map(item => '<button class="loot-pickup" data-pickup="' + drop.id + '" data-replace-weapon="' + item.id + '">Remplacer ' + escapeHtml(item.name) + '</button>').join("")
+          : '<button class="loot-pickup" data-pickup="' + drop.id + '">Ramasser</button>';
+        return '<div class="ground-loot-row"><span>' + escapeHtml(drop.name) + ' ×' + drop.quantity + (drop.isSupplyDrop ? ' · 📦 RAVITAILLEMENT' : '') + ' <small class="rarity-' + drop.rarity + '">' + drop.rarity + '</small></span><div>' + buttons + '</div></div>';
+      }).join("")
+      : '<p class="empty-feed">Aucun objet au sol à proximité.</p>';
+    groundLoot.querySelectorAll("[data-pickup]").forEach(button => button.addEventListener("click", () => sendZoneAction("PICKUP_LOOT", {dropId:button.dataset.pickup,replaceWeaponId:button.dataset.replaceWeapon||undefined})));
+  }
 }
 function renderEvents(events) {
   $("event-log").innerHTML = events.slice(0, 8).map(item => `<div class="event-row"><b>${escapeHtml(item.title)}</b><p>${escapeHtml(item.description)}</p></div>`).join("");
@@ -205,22 +228,40 @@ function renderEvents(events) {
     ? eliminations.map(item => `<div class="elimination-row"><b>${escapeHtml(item.description)}</b><small>Zone ${Math.min(7, item.phase + 1)} · ${new Date(item.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>`).join("")
     : '<p class="empty-feed">Aucune élimination pour le moment. Les affrontements entre équipes apparaîtront ici.</p>';
 }
+function readFncsSeries() {
+  try { return JSON.parse(localStorage.getItem("fortnite-manager-fncs-series") || '{"number":1,"results":[]}'); }
+  catch { return {number:1,results:[]}; }
+}
+function renderFncsSeries(match) {
+  const series = readFncsSeries();
+  if (match.stage === "FINISHED" && !series.results.some(result => result.id === match.id)) {
+    if (series.results.length >= 6) { series.number += 1; series.results = []; }
+    series.results.push({id:match.id,points:match.totalPoints,placement:match.finalPlacement,kills:match.userTeam.eliminations});
+    try { localStorage.setItem("fortnite-manager-fncs-series", JSON.stringify(series)); } catch {}
+  }
+  const points = series.results.reduce((sum,result)=>sum+result.points,0);
+  const best = series.results.length ? Math.min(...series.results.map(result=>result.placement)) : "—";
+  const target = $("series-info");
+  if (target) target.innerHTML = '<div class="location-stat"><span>Série FNCS</span><b>#' + series.number + '</b></div><div class="location-stat"><span>Parties jouées</span><b>' + series.results.length + '/6</b></div><div class="location-stat"><span>Total de points</span><b>' + points + ' pts</b></div><div class="location-stat"><span>Meilleur placement</span><b>#' + best + '</b></div><div class="series-results">' + (series.results.length ? series.results.map((result,index)=>'<span>Game ' + (index+1) + ' · #' + result.placement + ' · ' + result.points + ' pts</span>').join('') : '<small>Aucune partie terminée dans cette série.</small>') + '</div>';
+}
 function renderMatch(match) {
   currentMatch = match;
+  renderFncsSeries(match);
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
   $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(7, match.phaseIndex + 1);
-  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} avec ${match.userTeam.eliminations} élimination(s).` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
+  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s) · ${match.totalPoints} points compétitifs.` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
   $("kills-left").textContent = match.userTeam.eliminations;
-  $("phase-number").textContent = match.stage === "DROP" ? "1/7" : match.stage === "FINISHED" ? "FIN" : Math.min(7, match.phaseIndex + 1) + "/5";
+  $("points-left").textContent = match.totalPoints;
+  $("phase-number").textContent = match.stage === "DROP" ? "1/7" : match.stage === "FINISHED" ? "FIN" : Math.min(7, match.phaseIndex + 1) + "/7";
   renderMap(match);
   renderActions(match);
   renderTeam(match.userTeam);
   renderEvents(match.events);
   const location = match.map.locations.find(l => l.id === match.currentLocationId);
-  $("location-info").innerHTML = `<div class="location-stat"><span>Position actuelle</span><b>${escapeHtml(location.name)}</b></div><div class="location-stat"><span>Qualité du loot</span><b>${location.lootQuality}/100</b></div><div class="location-stat"><span>Danger local</span><b>${location.danger}/100</b></div><div class="location-stat"><span>Équipes restantes</span><b>${match.teamsRemaining}</b></div>`;
+  $("location-info").innerHTML = `<div class="location-stat"><span>Stratégie IGL</span><b>${({PRUDENT:"Prudent",AGGRESSIVE:"Agressif",STRATEGIC:"Stratégique",OPPORTUNISTIC:"Opportuniste"})[match.userTeam.strategy]}</b></div><div class="location-stat"><span>Score compétitif</span><b>${match.totalPoints} pts</b></div><div class="location-stat"><span>Position actuelle</span><b>${escapeHtml(location.name)}</b></div><div class="location-stat"><span>Qualité du loot</span><b>${location.lootQuality}/100</b></div><div class="location-stat"><span>Danger local</span><b>${location.danger}/100</b></div><div class="location-stat"><span>Équipes restantes</span><b>${match.teamsRemaining}</b></div>`;
   const surgePercent = Math.min(100, Math.round((match.userTeam.damageDealt || 0) / Math.max(1, match.surgeThreshold || 1) * 100));
   const surgeStatus = match.stormSurgeActive ? "ACTIVE · dégâts toutes les 5 s" : match.phaseIndex >= 3 ? "SEUIL ATTEINT" : "PAS ENCORE ACTIVE";
   const secondsLeft = Math.max(0, match.secondsUntilShrink || 0);

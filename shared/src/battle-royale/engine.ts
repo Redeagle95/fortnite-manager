@@ -7,10 +7,16 @@ const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n))
 const TEAM_SIZE: Record<BattleMatch["mode"], number> = { SOLO: 1, DUO: 2, TRIO: 3, SQUAD: 4 };
 const rarityWeights: Array<[Rarity, number]> = [["COMMON", 38], ["UNCOMMON", 27], ["RARE", 18], ["EPIC", 10], ["LEGENDARY", 5], ["MYTHIC", 2]];
 
-function rarityRoll(random: SeededRandom): Rarity {
+function rarityRoll(random: SeededRandom, lootQuality = 50): Rarity {
+  const luck = clamp((lootQuality - 50) / 50, -1, 1);
+  const adjusted: Array<[Rarity, number]> = [
+    ["COMMON", 38 - 6 * luck], ["UNCOMMON", 27 - 2 * luck],
+    ["RARE", 18 + luck], ["EPIC", 10 + 3 * luck],
+    ["LEGENDARY", 5 + 2 * luck], ["MYTHIC", 2 + 2 * luck],
+  ];
   const roll = random.next() * 100;
   let cursor = 0;
-  for (const [rarity, weight] of rarityWeights) { cursor += weight; if (roll < cursor) return rarity; }
+  for (const [rarity, weight] of adjusted) { cursor += weight; if (roll < cursor) return rarity; }
   return "MYTHIC";
 }
 function createSkills(random: SeededRandom, base?: number): PlayerSkill {
@@ -26,12 +32,12 @@ function createSkills(random: SeededRandom, base?: number): PlayerSkill {
   };
 }
 function createInventory(): Inventory { return { weapons: [], items: [], ammo: {}, maxWeaponSlots: 5 }; }
-function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch["mode"], locationId: string, x: number, y: number, random: SeededRandom, skillBase?: number, playerRatings?: number[]): BattleTeam {
+function createTeam(id: string, name: string, isUser: boolean, mode: BattleMatch["mode"], locationId: string, x: number, y: number, random: SeededRandom, skillBase?: number, playerRatings?: number[], strategy: BattleMatch["userTeam"]["strategy"] = "STRATEGIC"): BattleTeam {
   const players: BattlePlayer[] = Array.from({ length: TEAM_SIZE[mode] }, (_, i) => ({
     id: `${id}-p${i + 1}`, name: isUser ? (i === 0 ? "Toi" : `Mate ${i}`) : `${name} ${i + 1}`,
-    skills: createSkills(random, playerRatings?.[i] ?? skillBase), alive: true, health: 100, shield: 0, knocked: false,
+    skills: createSkills(random, playerRatings?.[i] ?? skillBase), role: (["IGL", "FRAGGER", "SUPPORT", "SCOUT"] as const)[i] ?? "SUPPORT", eliminations: 0, damageDealt: 0, rebooted: false, alive: true, health: 100, shield: 0, knocked: false,
   }));
-  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0, damageDealt: 0 };
+  return { id, name, isUser, players, inventory: createInventory(), resources: { wood: 0, stone: 0, metal: 0 }, eliminations: 0, strategy, rebootTokens: Math.max(0, players.length - 1), placement: null, dropLocationId: locationId, alive: true, position: { x, y }, builds: 0, damageDealt: 0 };
 }
 function event(match: BattleMatch, type: BattleEvent["type"], title: string, description: string): BattleEvent {
   const item = { id: `event-${match.events.length + 1}`, phase: match.phaseIndex, type, title, description, createdAt: Date.now() };
@@ -48,9 +54,15 @@ function updateCounts(match: BattleMatch): void {
   else if (match.teamsRemaining === 1 && match.userTeam.alive) finishMatch(match, "WIN");
 }
 function finishMatch(match: BattleMatch, result: "WIN" | "ELIMINATED"): void {
+  if (match.stage === "FINISHED") return;
   match.stage = "FINISHED"; match.result = result; match.finishedAt = Date.now();
   match.finalPlacement = result === "WIN" ? 1 : Math.max(1, match.teamsRemaining + 1);
   match.userTeam.placement = match.finalPlacement;
+  const placement = match.finalPlacement;
+  match.placementPoints = placement === 1 ? 65 : placement === 2 ? 55 : placement === 3 ? 48 : placement <= 5 ? 40 : placement <= 10 ? 30 : placement <= 15 ? 20 : placement <= 25 ? 10 : 0;
+  match.eliminationPoints = match.userTeam.eliminations * 2;
+  match.totalPoints = match.placementPoints + match.eliminationPoints;
+  event(match, "INFO", "Score compétitif", `Placement #${placement} : ${match.placementPoints} pts · ${match.userTeam.eliminations} élimination(s) : ${match.eliminationPoints} pts · Total : ${match.totalPoints} pts.`);
 }
 function pickLocation(random: SeededRandom): MapLocation {
   return BATTLE_ROYALE_MAP.locations[random.nextInt(0, BATTLE_ROYALE_MAP.locations.length - 1)];
@@ -62,7 +74,7 @@ function makeDrop(match: BattleMatch, location: MapLocation, random: SeededRando
     const roll = random.next();
     if (roll < 0.58) {
       const weapon = WEAPONS[random.nextInt(0, WEAPONS.length - 1)];
-      const rarity = rarityRoll(random);
+      const rarity = rarityRoll(random, location.lootQuality);
       drops.push({ id: `loot-${match.lootOnGround.length + drops.length + 1}`, kind: "WEAPON", name: weapon.name, definitionId: weapon.id, category: weapon.category, rarity, damage: Math.round(weapon.baseDamage * RARITY_MULTIPLIER[rarity]), quantity: 1 });
     } else if (roll < 0.83) {
       const item = CONSUMABLES[random.nextInt(0, CONSUMABLES.length - 1)];
@@ -74,7 +86,7 @@ function makeDrop(match: BattleMatch, location: MapLocation, random: SeededRando
       drops.push({ id: `loot-${match.lootOnGround.length + drops.length + 1}`, kind: "MATERIAL", name: material, material, rarity: "COMMON", quantity: random.nextInt(20, 50) });
     }
   }
-  return drops;
+  return drops.map(drop => ({ ...drop, locationId: location.id }));
 }
 function collectLoot(team: BattleTeam, drops: LootDrop[]): { collected: LootDrop[]; remaining: LootDrop[] } {
   const collected: LootDrop[] = [];
@@ -138,23 +150,33 @@ export function getFightProbability(match: BattleMatch, style?: "HEIGHT" | "MID"
   const buildAdvantage = Math.min(8, match.userTeam.resources.wood / 80 + match.userTeam.resources.stone / 100);
   return Math.round(clamp(50 + (userPower - enemyPower) * 0.72 + positioning + buildAdvantage, 5, 95));
 }
-function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE"): FightReport {
+function fight(match: BattleMatch, random: SeededRandom, style?: "HEIGHT" | "MID" | "LOW" | "OUTSIDE", combatMode?: "FOCUS" | "BOXFIGHT", targetPlayerId?: string): FightReport {
   const enemy = findEnemy(match, match.stage === "DROP" ? match.selectedDropId : match.currentLocationId);
   if (!enemy) return { winProbability: 100, won: true, enemyTeamName: "Personne", enemyEliminations: 0, allyLosses: 0, summary: "Aucun adversaire sur ce spot : ton équipe sécurise la zone." };
-  const winProbability = getFightProbability(match, style);
+  const baseProbability = getFightProbability(match, style);
+  const allies = activePlayers(match.userTeam);
+  const averageAim = allies.reduce((sum, player) => sum + player.skills.aim + player.skills.teamwork, 0) / Math.max(1, allies.length) / 2;
+  const averageBuild = allies.reduce((sum, player) => sum + player.skills.building, 0) / Math.max(1, allies.length);
+  const focusBonus = combatMode === "FOCUS" ? averageAim * 0.075 : 0;
+  const boxBonus = combatMode === "BOXFIGHT" ? averageBuild * 0.09 + (match.userTeam.inventory.weapons.some(weapon => weapon.category === "SHOTGUN") ? 5 : -2) : 0;
+  const winProbability = Math.round(clamp(baseProbability + focusBonus + boxBonus, 5, 95));
   const won = random.next() * 100 < winProbability;
   const enemyAlive = alivePlayers(enemy);
-  const allies = activePlayers(match.userTeam);
+  if (targetPlayerId) enemyAlive.sort((a, b) => Number(b.id === targetPlayerId) - Number(a.id));
+  else if (combatMode === "FOCUS") enemyAlive.sort((a, b) => (a.health + a.shield) - (b.health + b.shield));
   const enemyEliminations = won ? enemyAlive.length : random.nextInt(0, Math.max(1, enemyAlive.length - 1));
   const allyLosses = won ? (random.next() < 0.12 ? 1 : 0) : Math.min(allies.length, random.nextInt(1, Math.max(1, allies.length)));
-  const userKiller = activePlayers(match.userTeam)[0];
+  const userKiller = activePlayers(match.userTeam).sort((a, b) => Number(b.role === "FRAGGER") - Number(a.role === "FRAGGER"))[0];
   for (let i = 0; i < enemyEliminations; i++) {
     const victim = enemyAlive[i];
     eliminatePlayer(victim);
+    if (userKiller) userKiller.eliminations += 1;
     event(match, "ELIMINATION", "Élimination", `${userKiller?.name ?? match.userTeam.name} (${match.userTeam.name}) élimine ${victim.name} (${enemy.name}).`);
   }
   if (enemyEliminations > 0) match.userTeam.eliminations += enemyEliminations;
-  match.userTeam.damageDealt += enemyEliminations * 100 + (won ? 80 : 35);
+  const damage = enemyEliminations * 100 + (won ? 80 : 35);
+  match.userTeam.damageDealt += damage;
+  if (userKiller) userKiller.damageDealt += damage;
   for (let i = 0; i < allyLosses; i++) {
     const downed = allies[allies.length - 1 - i];
     downed.knocked = true; downed.health = 0; downed.shield = 0;
@@ -289,6 +311,14 @@ function applyStormDamage(match: BattleMatch, seconds = 1): void {
 }
 
 function updateStormCircle(match: BattleMatch): void {
+  if (match.mobileZoneActive && match.secondsUntilShrink <= 0 && match.secondsIntoShrink >= match.phases[5].shrinkSeconds) {
+    const t = match.gameTimeSeconds / 22;
+    const radius = match.storm.radius;
+    match.storm.x = clamp(5000 + Math.sin(t) * 430, radius, match.map.width - radius);
+    match.storm.y = clamp(5000 + Math.cos(t * 0.83) * 360, radius, match.map.height - radius);
+    match.stormTarget = { ...match.storm };
+    return;
+  }
   const phase = match.phases[Math.max(0, Math.min(match.phaseIndex - 1, match.phases.length - 1))];
   if (match.secondsUntilShrink > 0) { match.secondsUntilShrink -= 1; return; }
   if (match.secondsIntoShrink >= phase.shrinkSeconds) return;
@@ -353,8 +383,9 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       const distance = Math.hypot(location.x - team.position.x, location.y - team.position.y);
       const highGround = location.tags.some(tag => ["hauteur", "position", "hill", "high-ground"].includes(tag));
       const highGroundBonus = match.phaseIndex >= 4 && highGround ? 1500 : 0;
-      const lootBonus = location.lootQuality * 3;
-      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? 5 : 8);
+      const lootBonus = location.lootQuality * (team.strategy === "AGGRESSIVE" ? 5 : 3);
+      const dangerWeight = team.strategy === "PRUDENT" ? 13 : team.strategy === "AGGRESSIVE" ? 3 : 8;
+      const dangerPenalty = location.danger * (match.phaseIndex >= 4 ? dangerWeight * 0.75 : dangerWeight);
       return { location, score: distance * 0.65 + dangerPenalty - lootBonus - highGroundBonus };
     }).sort((a, b) => a.score - b.score)[0]?.location;
     const targetX = destination?.x ?? match.stormTarget.x;
@@ -369,6 +400,17 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       x: Math.max(120, Math.min(mapWidth - 120, team.position.x + dx / distance * step + driftX)),
       y: Math.max(120, Math.min(mapHeight - 120, team.position.y + dy / distance * step + driftY)),
     };
+  }
+
+  // Supply drops appear in the mid-game at a safe POI and contain higher-rarity loot.
+  if (match.phaseIndex >= 2 && match.phaseIndex <= 5 && random.next() < 0.055 && !match.lootOnGround.some(drop => drop.isSupplyDrop)) {
+    const safeDropLocations = match.map.locations.filter(location => isInsideStorm(location.x, location.y, match.stormTarget));
+    const pool = safeDropLocations.length ? safeDropLocations : match.map.locations;
+    const supplyLocation = pool[random.nextInt(0, pool.length - 1)];
+    const supplyLoot = makeDrop(match, { ...supplyLocation, lootQuality: 100, lootAmount: 9 }, random).slice(0, 8)
+      .map(drop => ({ ...drop, isSupplyDrop: true }));
+    match.lootOnGround.push(...supplyLoot);
+    event(match, "SUPPLY_DROP", "Ravitaillement aérien", `Un ravitaillement arrive à ${supplyLocation.name} avec du loot de meilleure qualité.`);
   }
 
   // Resolve at most one encounter per team in this tick. Each death gets its own feed entry.
@@ -392,6 +434,10 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
     if (powerDifference < -15) willingnessToFight *= 0.45;
     else if (powerDifference > 15) willingnessToFight *= 1.15;
     if (match.phaseIndex >= 4) willingnessToFight *= 1.1;
+    if (team.strategy === "AGGRESSIVE") willingnessToFight *= 1.4;
+    if (team.strategy === "PRUDENT") willingnessToFight *= 0.55;
+    if (team.strategy === "OPPORTUNISTIC") willingnessToFight *= powerDifference > 0 ? 1.45 : 0.65;
+    if (team.strategy === "STRATEGIC") willingnessToFight *= 0.9;
     if (random.next() > Math.min(0.9, willingnessToFight)) continue;
 
     engaged.add(team.id);
@@ -404,7 +450,10 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
 
     eliminatePlayer(victim);
     winner.eliminations += 1;
-    winner.damageDealt += random.nextInt(90, 180);
+    killer.eliminations += 1;
+    const damage = random.nextInt(90, 180);
+    winner.damageDealt += damage;
+    killer.damageDealt += damage;
     event(match, "ELIMINATION", "Élimination", `${killer.name} (${winner.name}) élimine ${victim.name} (${loser.name}).`);
 
     // A losing squad can suffer a second elimination in a longer exchange.
@@ -413,6 +462,7 @@ function simulateWorldTick(match: BattleMatch, random: SeededRandom, encounterCh
       const secondKiller = alivePlayers(winner)[0] ?? killer;
       eliminatePlayer(secondVictim);
       winner.eliminations += 1;
+      secondKiller.eliminations += 1;
       event(match, "ELIMINATION", "Élimination", `${secondKiller.name} (${winner.name}) élimine ${secondVictim.name} (${loser.name}).`);
     }
 
@@ -426,6 +476,49 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
   const location = match.map.locations.find(l => l.id === match.currentLocationId)!;
   switch (action.type) {
     case "FIGHT": fight(match, random, action.style); break;
+    case "FOCUS_FIRE": {
+      const report = fight(match, random, undefined, "FOCUS", action.targetPlayerId);
+      event(match, "FIGHT", "Focus d'équipe", `Concentration des tirs : ${report.summary}`);
+      break;
+    }
+    case "BOXFIGHT": {
+      const report = fight(match, random, "MID", "BOXFIGHT");
+      event(match, "FIGHT", "Boxfight", `Combat rapproché : ${report.summary}`);
+      break;
+    }
+    case "DISENGAGE": {
+      const candidates = match.map.locations.filter(candidate => candidate.id !== match.currentLocationId && isInsideStorm(candidate.x, candidate.y, match.stormTarget));
+      const pool = candidates.length ? candidates : match.map.locations.filter(candidate => candidate.id !== match.currentLocationId);
+      const destination = pool.sort((a, b) => (a.danger * 3 + Math.hypot(a.x-match.stormTarget.x,a.y-match.stormTarget.y)*0.02) - (b.danger * 3 + Math.hypot(b.x-match.stormTarget.x,b.y-match.stormTarget.y)*0.02))[0] ?? nearestLocation(match, random);
+      moveTeam(match, destination);
+      event(match, "INFO", "Désengagement", `Ton équipe rompt le combat et rejoint ${destination.name} pour se replacer.`);
+      break;
+    }
+    case "PICKUP_LOOT": {
+      const index = match.lootOnGround.findIndex(drop => drop.id === action.dropId);
+      if (index < 0) { event(match, "INFO", "Loot indisponible", "Cet objet n'est plus au sol."); break; }
+      const drop = match.lootOnGround[index];
+      if (drop.locationId && drop.locationId !== match.currentLocationId) {
+        const dropLocation = match.map.locations.find(location => location.id === drop.locationId);
+        event(match, "INFO", "Loot trop éloigné", `Cet objet se trouve à ${dropLocation?.name ?? "un autre lieu"}.`);
+        break;
+      }
+      if (drop.kind === "WEAPON" && match.userTeam.inventory.weapons.length >= match.userTeam.inventory.maxWeaponSlots) {
+        const weaponIndex = match.userTeam.inventory.weapons.findIndex(weapon => weapon.id === action.replaceWeaponId);
+        if (weaponIndex < 0) { event(match, "INFO", "Inventaire plein", "Choisis l'arme à remplacer pour ramasser cet équipement."); break; }
+        const previous = match.userTeam.inventory.weapons[weaponIndex];
+        match.userTeam.inventory.weapons[weaponIndex] = { id: drop.id, definitionId: drop.definitionId!, name: drop.name, category: drop.category!, rarity: drop.rarity, damage: drop.damage!, magazine: 30, ammo: 30 };
+        match.lootOnGround.splice(index, 1);
+        event(match, "LOOT", "Arme remplacée", `${drop.name} remplace ${previous.name}.`);
+      } else {
+        const collected = collectLoot(match.userTeam, [drop]);
+        if (collected.collected.length) {
+          match.lootOnGround.splice(index, 1);
+          event(match, "LOOT", "Objet ramassé", `${drop.name} récupéré depuis le sol.`);
+        }
+      }
+      break;
+    }
     case "FIGHT_THEN_ROTATE": {
       fight(match, random);
       if (match.userTeam.alive) {
@@ -496,6 +589,17 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
       event(match, "INFO", "Réanimation", summary);
       break;
     }
+    case "REBOOT": {
+      const target = match.userTeam.players.find(player => !player.alive && !player.rebooted && (!action.playerId || player.id === action.playerId));
+      if (match.phaseIndex >= 6 || match.userTeam.rebootTokens <= 0 || activePlayers(match.userTeam).length <= 0 || !target) {
+        event(match, "INFO", "Reboot indisponible", "Il faut un mate actif, un jeton de reboot et être avant le dernier cercle.");
+        break;
+      }
+      target.alive = true; target.knocked = false; target.health = 100; target.shield = 0; target.rebooted = true;
+      match.userTeam.rebootTokens -= 1;
+      event(match, "INFO", "Mate rebooté", `${target.name} revient en partie avec 100 PV. Jetons restants : ${match.userTeam.rebootTokens}.`);
+      break;
+    }
     case "HEAL": {
       const summary = healTeam(match.userTeam, action.itemDefinitionId, action.playerId);
       event(match, "HEAL", "Soin utilisé", summary);
@@ -512,7 +616,7 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
   }
 }
-export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], dropLocationId: string, teamNames = ["Ton équipe"], playerRatings?: number[]): BattleMatch {
+export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], dropLocationId: string, teamNames = ["Ton équipe"], playerRatings?: number[], userStrategy: BattleMatch["userTeam"]["strategy"] = "STRATEGIC"): BattleMatch {
   if (!Number.isInteger(seed)) throw new Error("La seed doit être un entier.");
   if (playerRatings && (playerRatings.length !== TEAM_SIZE[mode] || playerRatings.some(rating => !Number.isFinite(rating) || rating < 0 || rating > 100))) {
     throw new Error(`Il faut fournir ${TEAM_SIZE[mode]} notes de joueurs comprises entre 0 et 100.`);
@@ -520,12 +624,13 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
   const random = new SeededRandom(seed);
   const location = BATTLE_ROYALE_MAP.locations.find(l => l.id === dropLocationId);
   if (!location) throw new Error("Point d'atterrissage inconnu.");
-  const userTeam = createTeam("user-team", teamNames[0] ?? "Ton équipe", true, mode, location.id, location.x, location.y, random, 72, playerRatings);
+  const userTeam = createTeam("user-team", teamNames[0] ?? "Ton équipe", true, mode, location.id, location.x, location.y, random, 72, playerRatings, userStrategy);
   const teams: BattleTeam[] = [userTeam];
   const totalTeams = Math.floor(100 / TEAM_SIZE[mode]);
   for (let i = 0; i < totalTeams - 1; i++) {
     const poi = BATTLE_ROYALE_MAP.locations[random.nextInt(0, BATTLE_ROYALE_MAP.locations.length - 1)];
-    const bot = createTeam(`bot-${i + 1}`, `Team ${String(i + 1).padStart(2, "0")}`, false, mode, poi.id, poi.x + random.nextInt(-120, 120), poi.y + random.nextInt(-120, 120), random);
+    const botStrategy = (["PRUDENT", "AGGRESSIVE", "STRATEGIC", "OPPORTUNISTIC"] as const)[random.nextInt(0, 3)];
+    const bot = createTeam(`bot-${i + 1}`, `Team ${String(i + 1).padStart(2, "0")}`, false, mode, poi.id, poi.x + random.nextInt(-120, 120), poi.y + random.nextInt(-120, 120), random, undefined, undefined, botStrategy);
     const botWeaponCount = random.nextInt(1, 3);
     for (let weaponIndex = 0; weaponIndex < botWeaponCount; weaponIndex++) {
       const definition = WEAPONS[random.nextInt(0, WEAPONS.length - 1)];
@@ -538,11 +643,11 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
   const match: BattleMatch = {
     id: `br-${seed}`, seed, mode, stage: "DROP",
     map: BATTLE_ROYALE_MAP, userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
-    storm: { x: 5000, y: 5000, radius: 5000 }, stormTarget: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0,
+    storm: { x: 5000, y: 5000, radius: 5000 }, stormTarget: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0, mobileZoneActive: false,
     secondsUntilShrink: ZONE_PHASES[0].waitSeconds, secondsIntoShrink: 0,
     gameTimeSeconds: 0, stormDamageTaken: 0, surgeDamageTaken: 0, surgeThreshold: 150, stormSurgeActive: false, lastSurgePulse: 0,
     lootOnGround: [], events: [], teamsRemaining: teams.length, playersRemaining: teams.reduce((n,t) => n + t.players.length, 0),
-    startedAt: Date.now(), finishedAt: null, finalPlacement: null, result: null,
+    startedAt: Date.now(), finishedAt: null, finalPlacement: null, placementPoints: 0, eliminationPoints: 0, totalPoints: 0, result: null,
   };
   event(match, "DROP", "Atterrissage confirmé", `Ton équipe atterrit à ${location.name}. ${teams.filter(t => !t.isUser && t.dropLocationId === location.id).length} équipe(s) ennemie(s) sont également présentes.`);
   match.surgeThreshold = Math.max(100, activePlayers(userTeam).length * 100);
@@ -585,23 +690,20 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   if (!match.userTeam.alive) { updateCounts(match); return match; }
   const random = new SeededRandom(match.seed + 1000 + match.phaseIndex * 97 + match.events.length * 13);
   processAction(match, action, random);
+  // Inventory and teammate interactions are quick decisions; they do not consume an entire storm phase.
+  if (["PICKUP_LOOT", "HEAL", "REVIVE", "REBOOT"].includes(action.type)) {
+    updateCounts(match);
+    return match;
+  }
   if (!isFinished(match)) simulateWorldTick(match, random);
   if (isFinished(match)) return match;
   match.stage = "ZONE";
   if (match.phaseIndex >= 6) {
-    const lastEnemy = match.teams.find(team => !team.isUser && team.alive);
-    if (lastEnemy && match.userTeam.alive && !["FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "FIGHT"].includes(action.type)) {
-      const report = fight(match, random);
-      if (!report.won) {
-        match.userTeam.alive = false;
-        for (const player of alivePlayers(match.userTeam)) eliminatePlayer(player);
-      } else {
-        for (const player of alivePlayers(lastEnemy)) eliminatePlayer(player);
-        lastEnemy.alive = false;
-      }
-    }
+    // Zone 7 is a true moving endgame: resolve one chosen fight per decision,
+    // but keep the match alive until only one squad remains.
     updateCounts(match);
-    if (!isFinished(match)) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match) && match.teamsRemaining <= 1) finishMatch(match, match.userTeam.alive ? "WIN" : "ELIMINATED");
+    if (!isFinished(match) && !match.userTeam.alive) finishMatch(match, "ELIMINATED");
     return match;
   }
   const next = match.phases[match.phaseIndex];
@@ -609,42 +711,52 @@ export function takeZoneAction(match: BattleMatch, action: BattleAction): Battle
   match.secondsUntilShrink = next.waitSeconds;
   match.secondsIntoShrink = 0;
   match.phaseIndex += 1;
+  if (match.phaseIndex >= 6) { match.mobileZoneActive = true; event(match, "STORM", "Zone mobile", "Le dernier cercle commence à se déplacer : adapte ta position en continu."); }
   updateSurge(match);
   updateCounts(match);
   return match;
 }
 export function getActionOptions(match: BattleMatch): Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> {
   const options: Array<{ type: ActionType; label: string; description: string; risk: "LOW" | "MEDIUM" | "HIGH" }> = match.stage === "DROP" ? [
-    { type: "FIGHT" as const, label: "Atterrir ici malgré la contestation", description: "Prendre le fight au spawn si une équipe adverse est présente.", risk: "HIGH" as const },
-    { type: "LOOT" as const, label: "Atterrir ici et loot librement", description: "Sécuriser le spot et récupérer le premier équipement.", risk: "MEDIUM" as const },
-    { type: "ROTATE" as const, label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" as const },
+    { type: "FIGHT", label: "Atterrir ici malgré la contestation", description: "Prendre le fight au spawn si une équipe adverse est présente.", risk: "HIGH" },
+    { type: "LOOT", label: "Atterrir ici et loot librement", description: "Sécuriser le spot et récupérer le premier équipement.", risk: "MEDIUM" },
+    { type: "ROTATE", label: "Changer de point de spawn", description: "Choisir un autre lieu pour éviter une équipe adverse.", risk: "LOW" },
   ] : match.phaseIndex === 1 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Comparer les notes, la vie, les boucliers et l'équipement des deux équipes.", risk: "HIGH" as const },
-    { type: "FARM_FULL" as const, label: "Farm complet · 500/500", description: "Récolter le maximum : 500 bois, 500 pierre et 500 métal.", risk: "LOW" as const },
-    { type: "FARM_HALF_ROTATE" as const, label: "Farm à moitié puis rotate", description: "Atteindre 250 de chaque matériau et partir plus tôt vers la zone.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Prendre des tags pour la surge", description: "Infliger des dégâts à distance sans chercher l'élimination.", risk: "MEDIUM" as const },
+    { type: "LOOT", label: "Explorer le spot et ouvrir les coffres", description: "Récupérer armes, soins, munitions et matériaux.", risk: "LOW" },
+    { type: "FIGHT", label: "Prendre un fight", description: "Engager une équipe contestataire.", risk: "HIGH" },
+    { type: "FARM_FULL", label: "Farm complet · 500/500", description: "Récolter 500 bois, pierre et métal.", risk: "LOW" },
+    { type: "FARM_HALF_ROTATE", label: "Farm à moitié puis rotate", description: "Atteindre 250 de chaque matériau puis partir.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Prendre des tags pour la surge", description: "Infliger des dégâts pour augmenter le score de surge.", risk: "MEDIUM" },
   ] : match.phaseIndex === 2 ? [
-    { type: "ROTATE" as const, label: "Lancer la rotation maintenant", description: "Rejoindre directement la prochaine zone avant la fermeture de la tempête.", risk: "LOW" as const },
-    { type: "FIGHT_THEN_ROTATE" as const, label: "Prendre un fight puis rotate", description: "Tenter un engagement avant de rejoindre la prochaine zone.", risk: "HIGH" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Chercher des dégâts sur une équipe adverse pour atteindre le seuil de storm surge.", risk: "MEDIUM" as const },
+    { type: "ROTATE", label: "Rotation sécurisée", description: "Rejoindre le prochain cercle.", risk: "LOW" },
+    { type: "FIGHT_THEN_ROTATE", label: "Fight puis rotation", description: "Prendre un combat avant de partir.", risk: "HIGH" },
+    { type: "DISENGAGE", label: "Se désengager", description: "Privilégier un trajet moins dangereux vers la zone.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Farmer la surge", description: "Prendre des tags pour atteindre le seuil.", risk: "MEDIUM" },
   ] : match.phaseIndex === 3 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight sur la rotation", description: "Évaluer la force et le stuff adverse avant l'engagement.", risk: "HIGH" as const },
-    { type: "ROTATE" as const, label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête et rejoindre le prochain cercle.", risk: "MEDIUM" as const },
-    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources sans dépasser 500 par matériau.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre des tags pour éviter les dégâts de storm surge si le seuil n'est pas atteint.", risk: "MEDIUM" as const },
+    { type: "FOCUS_FIRE", label: "Focus une équipe", description: "Concentrer les tirs sur une cible prioritaire.", risk: "HIGH" },
+    { type: "FIGHT", label: "Prendre un fight sur la rotation", description: "Comparer les notes, les PV, les boucliers et l'équipement.", risk: "HIGH" },
+    { type: "ROTATE", label: "Avancer vers la prochaine zone", description: "Prendre de l'avance sur la tempête.", risk: "MEDIUM" },
+    { type: "REFRESH", label: "Refresh matériaux", description: "Compléter progressivement les ressources.", risk: "LOW" },
+    { type: "FARM_SURGE", label: "Farmer la surge", description: "Infliger les dégâts manquants aux adversaires.", risk: "MEDIUM" },
   ] : match.phaseIndex === 4 || match.phaseIndex === 5 ? [
-    { type: "FIGHT" as const, label: "Prendre un fight contrôlé", description: "Évaluer les adversaires proches et tenter une élimination avant le dernier cercle.", risk: "HIGH" as const },
-    { type: "ROTATE" as const, label: "Prendre une bonne position", description: "Rejoindre le prochain cercle et sécuriser une position jouable.", risk: "MEDIUM" as const },
-    { type: "REFRESH" as const, label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" as const },
-    { type: "FARM_SURGE" as const, label: "Farmer la surge", description: "Prendre les derniers tags nécessaires pour atteindre le seuil.", risk: "MEDIUM" as const },
+    { type: "FOCUS_FIRE", label: "Focus une équipe", description: "Chercher une élimination rapide.", risk: "HIGH" },
+    { type: "BOXFIGHT", label: "Prendre un boxfight", description: "Le build, le placement et les pompes influencent le combat rapproché.", risk: "HIGH" },
+    { type: "ROTATE", label: "Prendre une bonne position", description: "Rejoindre le prochain cercle.", risk: "MEDIUM" },
+    { type: "DISENGAGE", label: "Se désengager", description: "Quitter un combat défavorable pour survivre.", risk: "LOW" },
+    { type: "REFRESH", label: "Refresh matériaux", description: "Compléter les ressources avant le dernier cercle.", risk: "LOW" },
   ] : [
-    { type: "FIGHT_HEIGHT" as const, label: "Prendre la hauteur", description: "Meilleure synergie avec fusils d'assaut et snipers.", risk: "HIGH" as const },
-    { type: "FIGHT_MID" as const, label: "Jouer au milieu", description: "Meilleure synergie avec les pompes et les armes polyvalentes.", risk: "HIGH" as const },
-    { type: "FIGHT_LOW" as const, label: "Jouer en bas", description: "Meilleure synergie avec les SMG et les pompes.", risk: "HIGH" as const },
-    { type: "FIGHT_OUTSIDE" as const, label: "Jouer hors zone", description: "Privilégier les armes à distance et les objets utilitaires.", risk: "HIGH" as const },
+    { type: "FIGHT_HEIGHT", label: "Prendre la hauteur", description: "Synergie renforcée avec fusils d'assaut et snipers.", risk: "HIGH" },
+    { type: "FIGHT_MID", label: "Jouer au milieu", description: "Synergie renforcée avec les pompes.", risk: "HIGH" },
+    { type: "FIGHT_LOW", label: "Jouer en bas", description: "Synergie renforcée avec les SMG et les pompes.", risk: "HIGH" },
+    { type: "FIGHT_OUTSIDE", label: "Jouer extérieur", description: "Synergie avec les armes à distance et objets utilitaires.", risk: "HIGH" },
   ];
+  const canReboot = match.phaseIndex < 6 && match.userTeam.rebootTokens > 0 && activePlayers(match.userTeam).length > 0 && match.userTeam.players.some(player => !player.alive && !player.rebooted);
+  if (canReboot) options.push({ type: "REBOOT", label: "Reboot un mate éliminé", description: "Un jeton disponible permet de faire revenir un joueur avant le dernier cercle.", risk: "MEDIUM" });
   const canRevive = match.userTeam.players.some(player => player.alive && player.knocked) && activePlayers(match.userTeam).length > 0;
-  if (canRevive) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV. Il faut garder au moins un mate actif.", risk: "MEDIUM" });
+  if (canRevive && match.phaseIndex < 6) options.push({ type: "REVIVE", label: "Réanimer un équipier", description: "Un équipier à terre revient avec 30 PV.", risk: "MEDIUM" });
+  const needsHealing = match.userTeam.players.some(player => player.alive && !player.knocked && (player.health < 100 || player.shield < 100));
+  if (needsHealing && match.phaseIndex < 6 && match.userTeam.inventory.items.some(item => item.kind === "HEAL" && item.quantity > 0)) options.push({ type: "HEAL", label: "Utiliser un soin", description: "Soigner le joueur le plus affaibli.", risk: "LOW" });
+  if (match.phaseIndex >= 3 && match.phaseIndex < 6) options.push({ type: "HOLD_POSITION", label: "Construire une position défensive", description: "Dépenser 10 matériaux pour sécuriser la position.", risk: "LOW" });
   return options;
 }
 export function getRarityRollTable(): ReadonlyArray<{ rarity: Rarity; weight: number }> {

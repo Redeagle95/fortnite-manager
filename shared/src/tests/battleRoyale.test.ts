@@ -149,4 +149,92 @@ describe("Battle Royale simulation", () => {
     expect(getActionOptions(match).map(action => action.type)).not.toContain("FARM_FULL");
   });
 
+  it("applies the chosen IGL strategy and assigns squad roles", () => {
+    const match = createBattleRoyale(9101, "SQUAD", "pine-woods", ["Equipe test"], [80, 75, 70, 65], "AGGRESSIVE");
+    expect(match.userTeam.strategy).toBe("AGGRESSIVE");
+    expect(match.userTeam.players.map(player => player.role)).toEqual(["IGL", "FRAGGER", "SUPPORT", "SCOUT"]);
+  });
+
+  it("awards placement and elimination points when the match ends", () => {
+    const match = createBattleRoyale(9102, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.eliminations = 3;
+    for (const team of match.teams) if (!team.isUser) { team.alive = false; for (const player of team.players) player.alive = false; }
+    match.stage = "ZONE";
+    match.phaseIndex = 6;
+    takeZoneAction(match, { type: "FIGHT_HEIGHT" });
+    expect(match.stage).toBe("FINISHED");
+    expect(match.placementPoints).toBe(65);
+    expect(match.eliminationPoints).toBe(6);
+    expect(match.totalPoints).toBe(71);
+  });
+
+  it("offers focus-fire, boxfight, disengage, healing and hold-position choices", () => {
+    const match = createBattleRoyale(9103, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 4;
+    match.userTeam.inventory.items.push({definitionId:"small-shield",name:"Mini potion",rarity:"UNCOMMON",quantity:2,kind:"HEAL",shield:25});
+    expect(getActionOptions(match).map(option => option.type)).toEqual(expect.arrayContaining(["FOCUS_FIRE","BOXFIGHT","DISENGAGE","HEAL","HOLD_POSITION"]));
+  });
+
+  it("moves the final safe zone during endgame", () => {
+    const match = createBattleRoyale(9104, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.mobileZoneActive = true;
+    match.storm = { x: 5000, y: 5000, radius: match.phases[5].radius };
+    match.stormTarget = { ...match.storm };
+    match.secondsIntoShrink = match.phases[5].shrinkSeconds;
+    match.secondsUntilShrink = 0;
+    const before = {...match.storm};
+    advanceMatchTime(match, 20);
+    expect(match.storm.x !== before.x || match.storm.y !== before.y).toBe(true);
+  });
+  it("allows picking up ground loot and replacing a full weapon slot", () => {
+    const match = createBattleRoyale(9105, "SOLO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.userTeam.inventory.weapons = Array.from({length:5},(_,i)=>({id:"old-"+i,definitionId:"old-"+i,name:"Old weapon "+i,category:"ASSAULT_RIFLE" as const,rarity:"COMMON" as const,damage:20,magazine:30,ammo:30}));
+    const drop = {id:"ground-weapon",kind:"WEAPON" as const,name:"New shotgun",definitionId:"pump-shotgun",category:"SHOTGUN" as const,rarity:"EPIC" as const,damage:100,quantity:1};
+    match.lootOnGround.push(drop);
+    const phaseBeforePickup = match.phaseIndex;
+    takeZoneAction(match,{type:"PICKUP_LOOT",dropId:drop.id,replaceWeaponId:"old-0"});
+    expect(match.phaseIndex).toBe(phaseBeforePickup);
+    expect(match.userTeam.inventory.weapons[0].name).toBe("New shotgun");
+    expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(false);
+  });
+
+  it("reboots one eliminated teammate using a limited team token", () => {
+    const match = createBattleRoyale(9106, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const target = match.userTeam.players[1];
+    target.alive = false;
+    target.health = 0;
+    expect(match.userTeam.rebootTokens).toBe(1);
+    takeZoneAction(match, {type:"REBOOT",playerId:target.id});
+    expect(target.alive).toBe(true);
+    expect(target.health).toBe(100);
+    expect(target.rebooted).toBe(true);
+    expect(match.userTeam.rebootTokens).toBe(0);
+  });
+
+  it("keeps ground loot at its POI until the team rotates there", () => {
+    const match = createBattleRoyale(9107, "DUO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    const remote = match.map.locations.find(location => location.id !== match.currentLocationId)!;
+    const drop = {id:"remote-supply-item",kind:"HEAL" as const,name:"Small shield",definitionId:"small-shield",rarity:"UNCOMMON" as const,quantity:1,locationId:remote.id,isSupplyDrop:true};
+    match.lootOnGround.push(drop);
+    takeZoneAction(match,{type:"PICKUP_LOOT",dropId:drop.id});
+    expect(match.lootOnGround.some(item=>item.id===drop.id)).toBe(true);
+    expect(match.userTeam.inventory.items.some(item=>item.definitionId==="small-shield")).toBe(false);
+  });
+
+  it("keeps the last zone restricted to height, mid, low and outside", () => {
+    const match = createBattleRoyale(9108, "TRIO", "pine-woods");
+    resolveDrop(match, { type: "LOOT" });
+    match.phaseIndex = 6;
+    match.userTeam.players[1].knocked = true;
+    match.userTeam.inventory.items.push({definitionId:"small-shield",name:"Mini potion",rarity:"UNCOMMON",quantity:1,kind:"HEAL",shield:25});
+    expect(getActionOptions(match).map(option => option.type)).toEqual(["FIGHT_HEIGHT","FIGHT_MID","FIGHT_LOW","FIGHT_OUTSIDE"]);
+  });
+
 });

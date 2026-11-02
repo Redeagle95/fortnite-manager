@@ -9,7 +9,7 @@ import type { BattleAction, BattleMatch, BattleMode } from "../../shared/src/bat
 
 const matches = new Map<string, BattleMatch>();
 const modes: BattleMode[] = ["SOLO", "DUO", "TRIO", "SQUAD"];
-const actions = ["FARM_FULL", "FARM_HALF_ROTATE", "FARM_SURGE", "FIGHT", "FIGHT_THEN_ROTATE", "FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE"] as const;
+const actions = ["FARM_FULL", "FARM_HALF_ROTATE", "FARM_SURGE", "FIGHT", "FIGHT_THEN_ROTATE", "FIGHT_HEIGHT", "FIGHT_MID", "FIGHT_LOW", "FIGHT_OUTSIDE", "LOOT", "REFRESH", "ROTATE", "HEAL", "HOLD_POSITION", "REVIVE", "REBOOT", "FOCUS_FIRE", "BOXFIGHT", "DISENGAGE", "PICKUP_LOOT"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -35,7 +35,8 @@ export function registerBattleRoyaleSocket(io: Server): void {
         if (!Number.isInteger(seed)) throw new Error("La seed doit être un entier.");
         if (!modes.includes(mode as BattleMode)) throw new Error("Mode de jeu invalide.");
         const ratings = Array.isArray(payload.playerRatings) ? payload.playerRatings.map(Number) : undefined;
-        const match = createBattleRoyale(seed, mode as BattleMode, dropLocationId, ["Ton équipe"], ratings);
+        const strategy = ["PRUDENT", "AGGRESSIVE", "STRATEGIC", "OPPORTUNISTIC"].includes(String(payload.strategy)) ? payload.strategy as "PRUDENT" | "AGGRESSIVE" | "STRATEGIC" | "OPPORTUNISTIC" : "STRATEGIC";
+        const match = createBattleRoyale(seed, mode as BattleMode, dropLocationId, ["Ton équipe"], ratings, strategy);
         match.id = `${match.id}-${socket.id.slice(0, 6)}`;
         matches.set(match.id, match);
         socket.join(match.id);
