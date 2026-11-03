@@ -3,6 +3,11 @@ export type Rarity = "COMMON" | "UNCOMMON" | "RARE" | "EPIC" | "LEGENDARY" | "MY
 export type WeaponCategory = "ASSAULT_RIFLE" | "SHOTGUN" | "SNIPER" | "SMG" | "PISTOL";
 export type Material = "WOOD" | "STONE" | "METAL";
 export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
+export type BusFlightStatus = "ON_BUS" | "DESCENDING" | "LANDED";
+export interface BusPoint { x: number; y: number; }
+export interface BusTrajectory { start: BusPoint; end: BusPoint; speed: number; durationSeconds: number; }
+export interface BusFlightPlan { teamId: string; destinationId: string; jumpAtSeconds: number; jumpedAtSeconds: number | null; landedAtSeconds: number | null; status: BusFlightStatus; jumpOrigin: BusPoint | null; descentDurationSeconds: number; }
+export interface BattleBusState { trajectory: BusTrajectory; elapsedSeconds: number; durationSeconds: number; position: BusPoint; status: "IN_PROGRESS" | "DESCENT" | "COMPLETE"; plans: BusFlightPlan[]; }
 export type TacticalStyle = "HEIGHT" | "MID" | "LOW" | "OUTSIDE";
 export type TeamStrategy = "PRUDENT" | "AGGRESSIVE" | "STRATEGIC" | "OPPORTUNISTIC";
 export type PlayerRole = "IGL" | "FRAGGER" | "SUPPORT" | "SCOUT";
@@ -57,6 +62,7 @@ export interface BattleEvent {
 export interface BattleMatch {
   id: string; seed: number; mode: BattleMode; stage: MatchStage;
   map: { name: string; width: number; height: number; locations: MapLocation[] };
+  bus: BattleBusState;
   userTeam: BattleTeam; teams: BattleTeam[]; selectedDropId: string;
   currentLocationId: string; storm: StormCircle; stormTarget: StormCircle; phases: ZonePhase[];
   phaseIndex: number; secondsUntilShrink: number; secondsIntoShrink: number; mobileZoneActive: boolean;

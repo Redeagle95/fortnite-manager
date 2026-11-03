@@ -1,8 +1,11 @@
 import type { Server } from "socket.io";
 import {
+  advanceBattleBus,
   advanceMatchTime,
   createBattleRoyale,
+  jumpBattleBus,
   resolveDrop,
+  setBattleBusDestination,
   takeZoneAction,
 } from "../../shared/src/battle-royale/engine";
 import type { BattleAction, BattleMatch, BattleMode } from "../../shared/src/battle-royale/types";
@@ -19,6 +22,11 @@ export function registerBattleRoyaleSocket(io: Server): void {
   // One server-side clock drives enemy rotations, fights, storm shrink and surge pulses.
   setInterval(() => {
     for (const match of matches.values()) {
+      if (match.stage === "DROP" && match.bus.status !== "COMPLETE") {
+        advanceBattleBus(match, 1);
+        io.to(match.id).emit("battle:state", match);
+        continue;
+      }
       if (match.stage !== "LOOT" && match.stage !== "ZONE") continue;
       advanceMatchTime(match, 5);
       io.to(match.id).emit("battle:state", match);
@@ -43,6 +51,30 @@ export function registerBattleRoyaleSocket(io: Server): void {
         socket.emit("battle:state", match);
       } catch (error) {
         socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible de créer la partie." });
+      }
+    });
+
+    socket.on("battle:bus:destination", (payload: unknown) => {
+      try {
+        if (!isRecord(payload)) throw new Error("Destination invalide.");
+        const match = matches.get(String(payload.matchId ?? ""));
+        if (!match) throw new Error("Partie introuvable.");
+        setBattleBusDestination(match, String(payload.locationId ?? ""));
+        io.to(match.id).emit("battle:state", match);
+      } catch (error) {
+        socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible de changer de destination." });
+      }
+    });
+
+    socket.on("battle:bus:jump", (payload: unknown) => {
+      try {
+        if (!isRecord(payload)) throw new Error("Action de saut invalide.");
+        const match = matches.get(String(payload.matchId ?? ""));
+        if (!match) throw new Error("Partie introuvable.");
+        jumpBattleBus(match);
+        io.to(match.id).emit("battle:state", match);
+      } catch (error) {
+        socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible de sauter." });
       }
     });
 
