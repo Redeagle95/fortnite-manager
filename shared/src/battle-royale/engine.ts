@@ -794,7 +794,10 @@ function makeBusFlightPlan(team: BattleTeam, destinationId: string, trajectory: 
   const perpendicular = Math.hypot(destination.x - projected.x, destination.y - projected.y);
   const descentDurationSeconds = Math.max(9, Math.min(24, perpendicular / 145));
   const closestTime = progress * trajectory.durationSeconds;
-  const jumpAtSeconds = Math.max(0, Math.min(trajectory.durationSeconds - 1, closestTime - descentDurationSeconds * 0.62));
+  const igl = team.players.find(player => player.role === "IGL" && player.alive);
+  const strategyTiming = team.strategy === "AGGRESSIVE" ? -3 : team.strategy === "PRUDENT" ? 3 : team.strategy === "OPPORTUNISTIC" ? 1.5 : 0;
+  const iglTiming = igl ? (50 - igl.skills.decisionMaking) * 0.055 : 0;
+  const jumpAtSeconds = Math.max(0, Math.min(trajectory.durationSeconds - 1, closestTime - descentDurationSeconds * 0.62 + strategyTiming + iglTiming));
   return { teamId: team.id, destinationId, jumpAtSeconds: Number(jumpAtSeconds.toFixed(1)), jumpedAtSeconds: null, landedAtSeconds: null, status: "ON_BUS", jumpOrigin: null, descentDurationSeconds: Number(descentDurationSeconds.toFixed(1)) };
 }
 function chooseBotDestination(team: BattleTeam, random: SeededRandom, trajectory: BattleBusState["trajectory"]): string {
