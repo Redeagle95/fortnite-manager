@@ -32,7 +32,7 @@ export interface Resources { wood: number; stone: number; metal: number; }
 export interface BattleTeam {
   id: string; name: string; isUser: boolean; players: BattlePlayer[];
   inventory: Inventory; resources: Resources; eliminations: number; strategy: TeamStrategy; rebootTokens: number;
-  placement: number | null; dropLocationId: string; alive: boolean;
+  placement: number | null; dropLocationId: string; dropSubzoneId?: string; alive: boolean;
   position: { x: number; y: number }; builds: number; damageDealt: number;
 }
 export interface MapLocation {
@@ -57,6 +57,9 @@ export interface BattleEvent {
 export interface BattleMatch {
   id: string; seed: number; mode: BattleMode; stage: MatchStage;
   map: { name: string; width: number; height: number; locations: MapLocation[] };
+  busTrajectory: { start: { x: number; y: number }; end: { x: number; y: number }; speed: number; durationSeconds: number };
+  dropPlans: Array<{ teamId: string; locationId: string; subzoneId: string; jumpAtSeconds: number; landingAtSeconds: number; distanceFromBus: number; score: number; reason: string }>;
+  contestations: Array<{ locationId: string; teamIds: string[]; arrivalSpreadSeconds: number; risk: "LOW" | "MEDIUM" | "HIGH" }>;
   userTeam: BattleTeam; teams: BattleTeam[]; selectedDropId: string;
   currentLocationId: string; storm: StormCircle; stormTarget: StormCircle; phases: ZonePhase[];
   phaseIndex: number; secondsUntilShrink: number; secondsIntoShrink: number; mobileZoneActive: boolean;
