@@ -1,6 +1,7 @@
 import { SeededRandom } from "../engine/random";
 import { CONSUMABLES, RARITIES, RARITY_MULTIPLIER, WEAPONS } from "./catalog";
 import { BATTLE_ROYALE_MAP, isInsideStorm, nextStormCircle, ZONE_PHASES } from "./map";
+import { calculateDropContestations, createDropPlan, generateBusTrajectory, getPoiSubzones } from "./earlyGame";
 import type { ActionType, BattleAction, BattleEvent, BattleMatch, BattlePlayer, BattleTeam, FightReport, Inventory, ItemStack, LootDrop, MapLocation, Material, PlayerSkill, Resources, Rarity, WeaponInstance } from "./types";
 
 const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n));
@@ -789,16 +790,35 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
     bot.resources = { wood: random.nextInt(0, 500), stone: random.nextInt(0, 500), metal: random.nextInt(0, 500) };
     teams.push(bot);
   }
+  const busTrajectory = generateBusTrajectory(random, BATTLE_ROYALE_MAP.width, BATTLE_ROYALE_MAP.height);
+  const dropPlans = teams.map(team => createDropPlan(
+    team,
+    BATTLE_ROYALE_MAP.locations,
+    busTrajectory,
+    random,
+    team.isUser ? dropLocationId : undefined,
+  ));
+  for (const plan of dropPlans) {
+    const team = teams.find(candidate => candidate.id === plan.teamId)!;
+    const poi = BATTLE_ROYALE_MAP.locations.find(candidate => candidate.id === plan.locationId)!;
+    const subzone = getPoiSubzones(poi).find(candidate => candidate.id === plan.subzoneId)!;
+    team.dropLocationId = plan.locationId;
+    team.dropSubzoneId = plan.subzoneId;
+    team.position = { x: subzone.x, y: subzone.y };
+  }
+  const contestations = calculateDropContestations(dropPlans);
   const match: BattleMatch = {
     id: `br-${seed}`, seed, mode, stage: "DROP",
-    map: BATTLE_ROYALE_MAP, userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
+    map: BATTLE_ROYALE_MAP, busTrajectory, dropPlans, contestations, userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
     storm: { x: 5000, y: 5000, radius: 5000 }, stormTarget: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0, mobileZoneActive: false,
     secondsUntilShrink: ZONE_PHASES[0].waitSeconds, secondsIntoShrink: 0,
     gameTimeSeconds: 0, stormDamageTaken: 0, surgeDamageTaken: 0, surgeThreshold: 150, stormSurgeActive: false, lastSurgePulse: 0,
     lootOnGround: [], events: [], teamsRemaining: teams.length, playersRemaining: teams.reduce((n,t) => n + t.players.length, 0),
     startedAt: Date.now(), finishedAt: null, finalPlacement: null, placementPoints: 0, eliminationPoints: 0, totalPoints: 0, result: null,
   };
-  event(match, "DROP", "Atterrissage confirmé", `Ton équipe atterrit à ${location.name}. ${teams.filter(t => !t.isUser && t.dropLocationId === location.id).length} équipe(s) ennemie(s) sont également présentes.`);
+  const userPlan = dropPlans.find(plan => plan.teamId === userTeam.id)!;
+  const userContest = contestations.find(contestation => contestation.locationId === userPlan.locationId);
+  event(match, "DROP", "Bus de combat en approche", `Trajectoire générée. Saut conseillé à ${Math.round(userPlan.jumpAtSeconds)} s, arrivée estimée à ${Math.round(userPlan.landingAtSeconds)} s. ${userContest ? `${userContest.teamIds.length - 1} équipe(s) sur le même POI · contestation ${userContest.risk.toLowerCase()}.` : "Aucune équipe ne vise le même POI."}`);
   match.surgeThreshold = Math.max(100, activePlayers(userTeam).length * 100);
   return match;
 }
@@ -824,7 +844,9 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
     const result = collectLoot(match.userTeam, drops); match.lootOnGround.push(...result.remaining);
     event(match, "LOOT", "Loot du spawn", `${result.collected.length} objet(s) récupéré(s). Les adversaires proches peuvent contester le spot.`);
     const nearby = findEnemy(match);
-    if (nearby && random.next() < 0.28) fight(match, random);
+    const contestation = match.contestations.find(item => item.locationId === match.currentLocationId && item.teamIds.includes(match.userTeam.id));
+    const contestChance = contestation?.risk === "HIGH" ? 0.72 : contestation?.risk === "MEDIUM" ? 0.42 : 0.18;
+    if (nearby && random.next() < contestChance) fight(match, random);
   }
   match.stormTarget = nextStormCircle(match.storm, match.phases[0].radius, random);
   match.phaseIndex = 1;
