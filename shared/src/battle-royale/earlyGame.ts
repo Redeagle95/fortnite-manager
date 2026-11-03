@@ -207,7 +207,7 @@ export function calculateDropContestations(plans: DropPlan[]): DropContestation[
       const arrivals = group.map(plan => plan.landingAtSeconds);
       const spread = Math.max(...arrivals) - Math.min(...arrivals);
       const distinctSubzones = new Set(group.map(plan => plan.subzoneId)).size;
-      const adjustedSpread = spread + (distinctSubzones === group.length ? 8 : 0);
+      const adjustedSpread = spread + (distinctSubzones === group.length ? 12 : 0);
       return {
         locationId,
         teamIds: group.map(plan => plan.teamId),
