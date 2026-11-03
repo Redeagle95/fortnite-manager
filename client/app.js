@@ -249,6 +249,19 @@ function renderActions(match) {
   const zoneNumber = match.stage === "DROP" ? 1 : Math.min(7, match.phaseIndex + 1);
   $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : busActive ? "Choisis ton timing de saut" : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
   $("decision-description").textContent = busActive ? "La trajectoire est en cours. Change de destination sur la carte ou laisse ton IGL choisir le timing optimal." : match.stage === "DROP" ? "Ton équipe a atterri. Choisis comment aborder le spawn." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
+  const advanceButton = $("advance-simulation");
+  const canAdvanceBus = busActive;
+  const canAdvanceGame = match.stage === "LOOT" || match.stage === "ZONE";
+  if (advanceButton) {
+    advanceButton.classList.toggle("hidden", !canAdvanceBus && !canAdvanceGame);
+    advanceButton.textContent = canAdvanceBus ? "AVANCER LE BUS DE 5 SECONDES" : "AVANCER LE TEMPS DE 30 SECONDES";
+    advanceButton.onclick = () => socket.emit("battle:advance", { matchId: match.id, seconds: canAdvanceBus ? 5 : 30 });
+  }
+  const pausedLabel = $("simulation-paused-label");
+  if (pausedLabel) pausedLabel.textContent = canAdvanceBus
+    ? "SIMULATION EN PAUSE · Le bus ne bouge que lorsque tu avances."
+    : canAdvanceGame ? "SIMULATION EN PAUSE · Analyse la situation avant de faire avancer le temps."
+    : "SIMULATION EN PAUSE · En attente de ta décision.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
   const hasFocusAction = actions.some(action => action.type === "FOCUS_FIRE");
   let focusTargetPicker = "";
