@@ -19,20 +19,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function registerBattleRoyaleSocket(io: Server): void {
-  // One server-side clock drives enemy rotations, fights, storm shrink and surge pulses.
-  setInterval(() => {
-    for (const match of matches.values()) {
-      if (match.stage === "DROP" && match.bus.status !== "COMPLETE") {
-        advanceBattleBus(match, 1);
-        io.to(match.id).emit("battle:state", match);
-        continue;
-      }
-      if (match.stage !== "LOOT" && match.stage !== "ZONE") continue;
-      advanceMatchTime(match, 5);
-      io.to(match.id).emit("battle:state", match);
-    }
-  }, 1000);
-
+  // The simulation is deliberately turn-based: no server clock advances in the background.
+  // The player explicitly advances the bus or game clock when ready.
   io.on("connection", (socket) => {
     socket.on("battle:create", (payload: unknown) => {
       try {
@@ -75,6 +63,26 @@ export function registerBattleRoyaleSocket(io: Server): void {
         io.to(match.id).emit("battle:state", match);
       } catch (error) {
         socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible de sauter." });
+      }
+    });
+
+    socket.on("battle:advance", (payload: unknown) => {
+      try {
+        if (!isRecord(payload)) throw new Error("Paramètres d'avance invalides.");
+        const match = matches.get(String(payload.matchId ?? ""));
+        if (!match) throw new Error("Partie introuvable.");
+        const requested = Number(payload.seconds ?? (match.stage === "DROP" ? 5 : 30));
+        if (!Number.isFinite(requested) || requested <= 0) throw new Error("Durée d'avance invalide.");
+        if (match.stage === "DROP" && match.bus.status !== "COMPLETE") {
+          advanceBattleBus(match, Math.max(1, Math.min(10, Math.floor(requested))));
+        } else if (match.stage === "LOOT" || match.stage === "ZONE") {
+          advanceMatchTime(match, Math.max(1, Math.min(120, Math.floor(requested))));
+        } else {
+          throw new Error("Aucune simulation à avancer pour le moment.");
+        }
+        io.to(match.id).emit("battle:state", match);
+      } catch (error) {
+        socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible d'avancer la simulation." });
       }
     });
 
