@@ -47,7 +47,7 @@ export function registerBattleRoyaleSocket(io: Server): void {
         if (!isRecord(payload)) throw new Error("Destination invalide.");
         const match = matches.get(String(payload.matchId ?? ""));
         if (!match) throw new Error("Partie introuvable.");
-        setBattleBusDestination(match, String(payload.locationId ?? ""));
+        setBattleBusDestination(match, String(payload.locationId ?? ""), payload.landingZone === "CENTER" || payload.landingZone === "ROOFTOPS" || payload.landingZone === "OUTSKIRTS" ? payload.landingZone : undefined);
         io.to(match.id).emit("battle:state", match);
       } catch (error) {
         socket.emit("battle:error", { message: error instanceof Error ? error.message : "Impossible de changer de destination." });
