@@ -38,6 +38,28 @@ describe("Battle Bus tactical phase", () => {
     expect(match.bus.elapsedSeconds).toBeGreaterThan(0);
   });
 
+  it("assigns tactical landing zones and applies a skill-based landing offset", () => {
+    const match = createBattleRoyale(7306, "SQUAD", "tilted-district");
+    const userPlan = match.bus.plans.find(plan => plan.teamId === match.userTeam.id)!;
+    expect(userPlan.landingZone).toBe("ROOFTOPS");
+    expect(userPlan.landingError).toBeGreaterThanOrEqual(0);
+
+    setBattleBusDestination(match, "pine-woods", "OUTSKIRTS");
+    expect(userPlan.landingZone).toBe("OUTSKIRTS");
+    expect(userPlan.landingOffset).not.toEqual({ x: 0, y: 0 });
+
+    jumpBattleBus(match);
+    advanceBattleBus(match, 100);
+    const destination = match.map.locations.find(location => location.id === "pine-woods")!;
+    expect(match.userTeam.position.x).toBe(destination.x + userPlan.landingOffset.x);
+    expect(match.userTeam.position.y).toBe(destination.y + userPlan.landingOffset.y);
+  });
+
+  it("gives AI teams a landing subzone based on their strategy", () => {
+    const match = createBattleRoyale(7307, "SOLO", "dusty-yard");
+    expect(match.bus.plans.every(plan => ["CENTER", "ROOFTOPS", "OUTSKIRTS"].includes(plan.landingZone))).toBe(true);
+  });
+
   it("does not allow changing destination after the team has jumped", () => {
     const match = createBattleRoyale(7305, "DUO", "red-factory");
     jumpBattleBus(match);

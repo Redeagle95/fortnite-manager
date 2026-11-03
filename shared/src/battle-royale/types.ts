@@ -4,9 +4,10 @@ export type WeaponCategory = "ASSAULT_RIFLE" | "SHOTGUN" | "SNIPER" | "SMG" | "P
 export type Material = "WOOD" | "STONE" | "METAL";
 export type MatchStage = "DROP" | "LOOT" | "ZONE" | "FINISHED";
 export type BusFlightStatus = "ON_BUS" | "DESCENDING" | "LANDED";
+export type LandingZone = "CENTER" | "ROOFTOPS" | "OUTSKIRTS";
 export interface BusPoint { x: number; y: number; }
 export interface BusTrajectory { start: BusPoint; end: BusPoint; speed: number; durationSeconds: number; }
-export interface BusFlightPlan { teamId: string; destinationId: string; jumpAtSeconds: number; jumpedAtSeconds: number | null; landedAtSeconds: number | null; status: BusFlightStatus; jumpOrigin: BusPoint | null; descentDurationSeconds: number; }
+export interface BusFlightPlan { teamId: string; destinationId: string; jumpAtSeconds: number; jumpedAtSeconds: number | null; landedAtSeconds: number | null; status: BusFlightStatus; jumpOrigin: BusPoint | null; descentDurationSeconds: number; landingZone: LandingZone; landingOffset: BusPoint; landingError: number; }
 export interface BattleBusState { trajectory: BusTrajectory; elapsedSeconds: number; durationSeconds: number; position: BusPoint; status: "IN_PROGRESS" | "DESCENT" | "COMPLETE"; plans: BusFlightPlan[]; }
 export type TacticalStyle = "HEIGHT" | "MID" | "LOW" | "OUTSIDE";
 export type TeamStrategy = "PRUDENT" | "AGGRESSIVE" | "STRATEGIC" | "OPPORTUNISTIC";
