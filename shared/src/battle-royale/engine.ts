@@ -849,7 +849,7 @@ export function jumpBattleBus(match: BattleMatch): BattleMatch {
 export function advanceBattleBus(match: BattleMatch, seconds = 1): BattleMatch {
   if (match.stage !== "DROP" || match.bus.status === "COMPLETE") return match;
   for (let tick = 0; tick < Math.max(1, Math.floor(seconds)); tick++) {
-    match.bus.elapsedSeconds = Math.min(match.bus.durationSeconds, match.bus.elapsedSeconds + 1);
+    match.bus.elapsedSeconds += 1; // Continue the clock during gliding; only the bus position is clamped to the route.
     match.bus.position = busPositionAt(match.bus.trajectory, match.bus.elapsedSeconds);
     for (const plan of match.bus.plans) {
       const team = match.teams.find(candidate => candidate.id === plan.teamId);
