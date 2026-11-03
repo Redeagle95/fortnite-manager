@@ -1,7 +1,7 @@
 import { SeededRandom } from "../engine/random";
 import { CONSUMABLES, RARITIES, RARITY_MULTIPLIER, WEAPONS } from "./catalog";
 import { BATTLE_ROYALE_MAP, isInsideStorm, nextStormCircle, ZONE_PHASES } from "./map";
-import type { ActionType, BattleAction, BattleEvent, BattleMatch, BattlePlayer, BattleTeam, FightReport, Inventory, ItemStack, LootDrop, MapLocation, Material, PlayerSkill, Resources, Rarity, WeaponInstance } from "./types";
+import type { ActionType, BattleAction, BattleBusState, BattleEvent, BattleMatch, BattlePlayer, BattleTeam, BusFlightPlan, FightReport, Inventory, ItemStack, LootDrop, MapLocation, Material, PlayerSkill, Resources, Rarity, WeaponInstance } from "./types";
 
 const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 const TEAM_SIZE: Record<BattleMatch["mode"], number> = { SOLO: 1, DUO: 2, TRIO: 3, SQUAD: 4 };
@@ -765,6 +765,130 @@ function processAction(match: BattleMatch, action: BattleAction, random: SeededR
     }
   }
 }
+
+function createBusTrajectory(random: SeededRandom): BattleBusState["trajectory"] {
+  const width = BATTLE_ROYALE_MAP.width, height = BATTLE_ROYALE_MAP.height;
+  const firstSide = random.nextInt(0, 3);
+  let secondSide = random.nextInt(0, 3);
+  while (secondSide === firstSide) secondSide = (secondSide + 1) % 4;
+  const edge = (side: number) => side === 0 ? { x: 0, y: random.nextInt(700, height - 700) }
+    : side === 1 ? { x: width, y: random.nextInt(700, height - 700) }
+    : side === 2 ? { x: random.nextInt(700, width - 700), y: 0 }
+    : { x: random.nextInt(700, width - 700), y: height };
+  const start = edge(firstSide), end = edge(secondSide);
+  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+  const durationSeconds = 58;
+  return { start, end, speed: distance / durationSeconds, durationSeconds };
+}
+function busPositionAt(trajectory: BattleBusState["trajectory"], seconds: number) {
+  const t = clamp(seconds / Math.max(1, trajectory.durationSeconds), 0, 1);
+  return { x: trajectory.start.x + (trajectory.end.x - trajectory.start.x) * t, y: trajectory.start.y + (trajectory.end.y - trajectory.start.y) * t };
+}
+function makeBusFlightPlan(team: BattleTeam, destinationId: string, trajectory: BattleBusState["trajectory"]): BusFlightPlan {
+  const destination = BATTLE_ROYALE_MAP.locations.find(location => location.id === destinationId);
+  if (!destination) throw new Error("Destination de Battle Bus inconnue.");
+  const dx = trajectory.end.x - trajectory.start.x, dy = trajectory.end.y - trajectory.start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const progress = clamp(((destination.x - trajectory.start.x) * dx + (destination.y - trajectory.start.y) * dy) / lengthSquared, 0, 1);
+  const projected = { x: trajectory.start.x + dx * progress, y: trajectory.start.y + dy * progress };
+  const perpendicular = Math.hypot(destination.x - projected.x, destination.y - projected.y);
+  const descentDurationSeconds = Math.max(9, Math.min(24, perpendicular / 145));
+  const closestTime = progress * trajectory.durationSeconds;
+  const jumpAtSeconds = Math.max(0, Math.min(trajectory.durationSeconds - 1, closestTime - descentDurationSeconds * 0.62));
+  return { teamId: team.id, destinationId, jumpAtSeconds: Number(jumpAtSeconds.toFixed(1)), jumpedAtSeconds: null, landedAtSeconds: null, status: "ON_BUS", jumpOrigin: null, descentDurationSeconds: Number(descentDurationSeconds.toFixed(1)) };
+}
+function chooseBotDestination(team: BattleTeam, random: SeededRandom, trajectory: BattleBusState["trajectory"]): string {
+  const scored = BATTLE_ROYALE_MAP.locations.map(location => {
+    const dx = trajectory.end.x - trajectory.start.x, dy = trajectory.end.y - trajectory.start.y;
+    const len = dx * dx + dy * dy;
+    const t = clamp(((location.x - trajectory.start.x) * dx + (location.y - trajectory.start.y) * dy) / len, 0, 1);
+    const nearest = { x: trajectory.start.x + dx * t, y: trajectory.start.y + dy * t };
+    const busDistance = Math.hypot(location.x - nearest.x, location.y - nearest.y);
+    const dangerWeight = team.strategy === "AGGRESSIVE" ? 0.08 : team.strategy === "PRUDENT" ? 0.28 : 0.17;
+    const lootWeight = team.strategy === "AGGRESSIVE" ? 0.23 : 0.17;
+    const score = location.lootQuality * lootWeight + location.lootAmount * 1.8 + location.resourceRichness * 0.08 - location.danger * dangerWeight - busDistance / 180 + random.next() * 12;
+    return { id: location.id, score };
+  }).sort((a, b) => b.score - a.score);
+  return scored[0].id;
+}
+function createBattleBus(random: SeededRandom, teams: BattleTeam[], userDropLocationId: string): BattleBusState {
+  const trajectory = createBusTrajectory(random);
+  const plans = teams.map(team => makeBusFlightPlan(team, team.isUser ? userDropLocationId : chooseBotDestination(team, random, trajectory), trajectory));
+  for (const team of teams) {
+    const plan = plans.find(candidate => candidate.teamId === team.id)!;
+    team.dropLocationId = plan.destinationId;
+    team.position = { ...trajectory.start };
+  }
+  return { trajectory, elapsedSeconds: 0, durationSeconds: trajectory.durationSeconds, position: { ...trajectory.start }, status: "IN_PROGRESS", plans };
+}
+export function setBattleBusDestination(match: BattleMatch, locationId: string): BattleMatch {
+  if (match.stage !== "DROP" || match.bus.status === "COMPLETE") throw new Error("La phase Battle Bus est terminée.");
+  const plan = match.bus.plans.find(candidate => candidate.teamId === match.userTeam.id);
+  if (!plan || plan.status !== "ON_BUS") throw new Error("Ton équipe a déjà sauté.");
+  if (!match.map.locations.some(location => location.id === locationId)) throw new Error("POI inconnu.");
+  plan.destinationId = locationId;
+  const replacement = makeBusFlightPlan(match.userTeam, locationId, match.bus.trajectory);
+  plan.jumpAtSeconds = Math.max(match.bus.elapsedSeconds, replacement.jumpAtSeconds);
+  plan.descentDurationSeconds = replacement.descentDurationSeconds;
+  match.userTeam.dropLocationId = locationId;
+  match.selectedDropId = locationId;
+  match.currentLocationId = locationId;
+  event(match, "DROP", "Destination modifiée", "Ton équipe vise maintenant " + match.map.locations.find(location => location.id === locationId)!.name + ".");
+  return match;
+}
+export function jumpBattleBus(match: BattleMatch): BattleMatch {
+  if (match.stage !== "DROP" || match.bus.status === "COMPLETE") throw new Error("La phase Battle Bus est terminée.");
+  const plan = match.bus.plans.find(candidate => candidate.teamId === match.userTeam.id);
+  if (!plan || plan.status !== "ON_BUS") throw new Error("Ton équipe a déjà sauté.");
+  plan.jumpedAtSeconds = match.bus.elapsedSeconds;
+  plan.jumpOrigin = { ...match.bus.position };
+  plan.status = "DESCENDING";
+  event(match, "DROP", "Saut confirmé", "Ton équipe quitte le Battle Bus en direction de " + match.map.locations.find(location => location.id === plan.destinationId)!.name + ".");
+  return match;
+}
+export function advanceBattleBus(match: BattleMatch, seconds = 1): BattleMatch {
+  if (match.stage !== "DROP" || match.bus.status === "COMPLETE") return match;
+  for (let tick = 0; tick < Math.max(1, Math.floor(seconds)); tick++) {
+    match.bus.elapsedSeconds = Math.min(match.bus.durationSeconds, match.bus.elapsedSeconds + 1);
+    match.bus.position = busPositionAt(match.bus.trajectory, match.bus.elapsedSeconds);
+    for (const plan of match.bus.plans) {
+      const team = match.teams.find(candidate => candidate.id === plan.teamId);
+      if (!team || !team.alive || plan.status === "LANDED") continue;
+      if (plan.status === "ON_BUS" && (match.bus.elapsedSeconds >= plan.jumpAtSeconds || match.bus.elapsedSeconds >= match.bus.durationSeconds)) {
+        plan.jumpedAtSeconds = match.bus.elapsedSeconds;
+        plan.jumpOrigin = { ...match.bus.position };
+        plan.status = "DESCENDING";
+        if (team.isUser) event(match, "DROP", "Saut de l'IGL", "Le timing recommandé est atteint. Ton équipe descend vers " + match.map.locations.find(location => location.id === plan.destinationId)!.name + ".");
+      }
+      if (plan.status === "DESCENDING" && plan.jumpedAtSeconds !== null && plan.jumpOrigin) {
+        const progress = clamp((match.bus.elapsedSeconds - plan.jumpedAtSeconds) / plan.descentDurationSeconds, 0, 1);
+        const destination = match.map.locations.find(location => location.id === plan.destinationId)!;
+        team.position = { x: plan.jumpOrigin.x + (destination.x - plan.jumpOrigin.x) * progress, y: plan.jumpOrigin.y + (destination.y - plan.jumpOrigin.y) * progress };
+        if (progress >= 1) {
+          plan.status = "LANDED";
+          plan.landedAtSeconds = match.bus.elapsedSeconds;
+          team.position = { x: destination.x, y: destination.y };
+          if (team.isUser) event(match, "DROP", "Atterrissage confirmé", "Ton équipe atterrit à " + destination.name + ".");
+        }
+      }
+    }
+    if (match.bus.elapsedSeconds >= match.bus.durationSeconds && match.bus.plans.some(plan => plan.status === "ON_BUS")) {
+      for (const plan of match.bus.plans.filter(candidate => candidate.status === "ON_BUS")) {
+        plan.jumpedAtSeconds = match.bus.elapsedSeconds;
+        plan.jumpOrigin = { ...match.bus.position };
+        plan.status = "DESCENDING";
+      }
+    }
+    const allLanded = match.bus.plans.every(plan => plan.status === "LANDED" || !match.teams.find(team => team.id === plan.teamId)?.alive);
+    match.bus.status = allLanded ? "COMPLETE" : match.bus.elapsedSeconds >= match.bus.durationSeconds ? "DESCENT" : "IN_PROGRESS";
+    if (allLanded) {
+      event(match, "DROP", "Phase Battle Bus terminée", "Toutes les équipes ont atterri. La phase de loot et de contestation peut commencer.");
+      break;
+    }
+  }
+  return match;
+}
+
 export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], dropLocationId: string, teamNames = ["Ton équipe"], playerRatings?: number[], userStrategy: BattleMatch["userTeam"]["strategy"] = "STRATEGIC"): BattleMatch {
   if (!Number.isInteger(seed)) throw new Error("La seed doit être un entier.");
   if (playerRatings && (playerRatings.length !== TEAM_SIZE[mode] || playerRatings.some(rating => !Number.isFinite(rating) || rating < 0 || rating > 100))) {
@@ -791,19 +915,26 @@ export function createBattleRoyale(seed: number, mode: BattleMatch["mode"], drop
   }
   const match: BattleMatch = {
     id: `br-${seed}`, seed, mode, stage: "DROP",
-    map: BATTLE_ROYALE_MAP, userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
+    map: BATTLE_ROYALE_MAP, bus: createBattleBus(random, teams, location.id), userTeam, teams, selectedDropId: location.id, currentLocationId: location.id,
     storm: { x: 5000, y: 5000, radius: 5000 }, stormTarget: { x: 5000, y: 5000, radius: 5000 }, phases: ZONE_PHASES, phaseIndex: 0, mobileZoneActive: false,
     secondsUntilShrink: ZONE_PHASES[0].waitSeconds, secondsIntoShrink: 0,
     gameTimeSeconds: 0, stormDamageTaken: 0, surgeDamageTaken: 0, surgeThreshold: 150, stormSurgeActive: false, lastSurgePulse: 0,
     lootOnGround: [], events: [], teamsRemaining: teams.length, playersRemaining: teams.reduce((n,t) => n + t.players.length, 0),
     startedAt: Date.now(), finishedAt: null, finalPlacement: null, placementPoints: 0, eliminationPoints: 0, totalPoints: 0, result: null,
   };
-  event(match, "DROP", "Atterrissage confirmé", `Ton équipe atterrit à ${location.name}. ${teams.filter(t => !t.isUser && t.dropLocationId === location.id).length} équipe(s) ennemie(s) sont également présentes.`);
+  event(match, "DROP", "Battle Bus en approche", `Trajectoire générée. Ton IGL recommande un saut à ${Math.round(match.bus.plans.find(plan => plan.teamId === userTeam.id)!.jumpAtSeconds)} s vers ${location.name}. Les autres équipes choisissent leur propre timing.`);
   match.surgeThreshold = Math.max(100, activePlayers(userTeam).length * 100);
   return match;
 }
 export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { type: "FIGHT" | "LOOT" | "ROTATE" }>): BattleMatch {
   if (match.stage !== "DROP") throw new Error("Le choix de spawn a déjà été effectué.");
+  // Compatibility for direct simulation callers: resolving the drop fast-forwards any remaining flight.
+  for (const plan of match.bus.plans) {
+    const team = match.teams.find(candidate => candidate.id === plan.teamId);
+    const destination = match.map.locations.find(location => location.id === plan.destinationId);
+    if (team && destination) { team.position = { x: destination.x, y: destination.y }; plan.status = "LANDED"; plan.landedAtSeconds = match.bus.elapsedSeconds; }
+  }
+  match.bus.status = "COMPLETE";
   const random = new SeededRandom(match.seed + 101);
   match.stage = "LOOT";
   if (action.type === "FIGHT") {
