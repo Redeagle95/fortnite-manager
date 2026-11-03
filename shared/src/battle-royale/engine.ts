@@ -962,13 +962,21 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
   match.bus.status = "COMPLETE";
   const random = new SeededRandom(match.seed + 101);
   match.stage = "LOOT";
+  const contestingTeams = match.teams.filter(team => {
+    if (team.isUser || !team.alive || team.dropLocationId !== match.selectedDropId) return false;
+    return Math.hypot(team.position.x - match.userTeam.position.x, team.position.y - match.userTeam.position.y) <= 900;
+  });
+  if (contestingTeams.length) {
+    event(match, "INFO", "POI contesté", `${contestingTeams.length} équipe(s) adverse(s) ont atterri à proximité : ${contestingTeams.map(team => team.name).join(", ")}. Les zones d'atterrissage et l'avance au sol influencent le premier affrontement.`);
+  } else {
+    event(match, "INFO", "POI sécurisé", "Aucune équipe adverse n'a atterri à proximité immédiate de ton équipe.");
+  }
   if (action.type === "FIGHT") {
     const spawnDrops = makeDrop(match, match.map.locations.find(l => l.id === match.currentLocationId)!, random);
     const spawnLoot = collectLoot(match.userTeam, spawnDrops);
     match.lootOnGround.push(...spawnLoot.remaining);
     event(match, "LOOT", "Loot de spawn", `${spawnLoot.collected.length} objet(s) récupéré(s) avant le combat.`);
-    const contested = match.teams.some(team => !team.isUser && team.alive && team.dropLocationId === match.selectedDropId);
-    if (contested) fight(match, random);
+    if (contestingTeams.length) fight(match, random);
     else event(match, "INFO", "Spawn non contesté", "Aucune équipe adverse n’a atterri sur ce spot : ton équipe sécurise le loot.");
   } else if (action.type === "ROTATE") {
     const target = match.map.locations.find(l => l.id === action.locationId) ?? nearestLocation(match, random); moveTeam(match, target);
@@ -980,7 +988,7 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
     const result = collectLoot(match.userTeam, drops); match.lootOnGround.push(...result.remaining);
     event(match, "LOOT", "Loot du spawn", `${result.collected.length} objet(s) récupéré(s). Les adversaires proches peuvent contester le spot.`);
     const nearby = findEnemy(match);
-    if (nearby && random.next() < 0.28) fight(match, random);
+    if (nearby && random.next() < (contestingTeams.length ? 0.55 : 0.28)) fight(match, random);
   }
   match.stormTarget = nextStormCircle(match.storm, match.phases[0].radius, random);
   match.phaseIndex = 1;
