@@ -101,3 +101,7 @@
 .bus-jump-button{width:100%;padding:13px;border:1px solid #f4c45e;border-radius:7px;background:linear-gradient(90deg,#9b641e,#d59a35);color:#fff;font-size:11px;font-weight:900;letter-spacing:1px;cursor:pointer}
 .bus-jump-button:hover{filter:brightness(1.12)}
 .bus-hint{display:block;margin-top:9px;color:#91a6bd;font-size:9px;line-height:1.5}
+
+
+/* Turn-based simulation controls */
+.advance-simulation{width:100%;margin-top:14px;padding:13px 14px;border:1px solid #58b7e8;border-radius:8px;background:linear-gradient(90deg,#164d70,#1d6f91);color:#f2fbff;font-size:11px;font-weight:900;letter-spacing:.8px;cursor:pointer;box-shadow:0 5px 18px #168ac533}.advance-simulation:hover{filter:brightness(1.15)}.simulation-paused-label{display:block;margin-top:9px;color:#8fa8c2;font-size:8px;font-weight:800;letter-spacing:1px;text-align:center}.advance-simulation.hidden{display:none!important}
