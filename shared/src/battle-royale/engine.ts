@@ -1,7 +1,7 @@
 import { SeededRandom } from "../engine/random";
 import { CONSUMABLES, RARITIES, RARITY_MULTIPLIER, WEAPONS } from "./catalog";
 import { BATTLE_ROYALE_MAP, isInsideStorm, nextStormCircle, ZONE_PHASES } from "./map";
-import type { ActionType, BattleAction, BattleBusState, BattleEvent, BattleMatch, BattlePlayer, BattleTeam, BusFlightPlan, FightReport, Inventory, ItemStack, LootDrop, MapLocation, Material, PlayerSkill, Resources, Rarity, WeaponInstance } from "./types";
+import type { ActionType, BattleAction, BattleBusState, BattleEvent, BattleMatch, BattlePlayer, BattleTeam, BusFlightPlan, FightReport, Inventory, ItemStack, LootDrop, MapLocation, Material, PlayerSkill, Resources, Rarity, WeaponInstance, LandingZone } from "./types";
 
 const clamp = (n: number, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 const TEAM_SIZE: Record<BattleMatch["mode"], number> = { SOLO: 1, DUO: 2, TRIO: 3, SQUAD: 4 };
@@ -784,7 +784,12 @@ function busPositionAt(trajectory: BattleBusState["trajectory"], seconds: number
   const t = clamp(seconds / Math.max(1, trajectory.durationSeconds), 0, 1);
   return { x: trajectory.start.x + (trajectory.end.x - trajectory.start.x) * t, y: trajectory.start.y + (trajectory.end.y - trajectory.start.y) * t };
 }
-function makeBusFlightPlan(team: BattleTeam, destinationId: string, trajectory: BattleBusState["trajectory"]): BusFlightPlan {
+function defaultLandingZone(team: BattleTeam): LandingZone {
+  if (team.strategy === "AGGRESSIVE") return "CENTER";
+  if (team.strategy === "PRUDENT") return "OUTSKIRTS";
+  return "ROOFTOPS";
+}
+function makeBusFlightPlan(team: BattleTeam, destinationId: string, trajectory: BattleBusState["trajectory"], requestedZone?: LandingZone): BusFlightPlan {
   const destination = BATTLE_ROYALE_MAP.locations.find(location => location.id === destinationId);
   if (!destination) throw new Error("Destination de Battle Bus inconnue.");
   const dx = trajectory.end.x - trajectory.start.x, dy = trajectory.end.y - trajectory.start.y;
@@ -792,13 +797,26 @@ function makeBusFlightPlan(team: BattleTeam, destinationId: string, trajectory: 
   const progress = clamp(((destination.x - trajectory.start.x) * dx + (destination.y - trajectory.start.y) * dy) / lengthSquared, 0, 1);
   const projected = { x: trajectory.start.x + dx * progress, y: trajectory.start.y + dy * progress };
   const perpendicular = Math.hypot(destination.x - projected.x, destination.y - projected.y);
-  const descentDurationSeconds = Math.max(9, Math.min(24, perpendicular / 145));
+  const averageSkill = team.players.reduce((sum, player) => sum + player.skills.positioning + player.skills.gameSense, 0) / Math.max(1, team.players.length * 2);
+  const landingError = Math.round((100 - averageSkill) * 2.2);
+  const descentDurationSeconds = Math.max(9, Math.min(24, perpendicular / 145)) + Math.max(0, Math.round((70 - averageSkill) / 10));
   const closestTime = progress * trajectory.durationSeconds;
   const igl = team.players.find(player => player.role === "IGL" && player.alive);
   const strategyTiming = team.strategy === "AGGRESSIVE" ? -3 : team.strategy === "PRUDENT" ? 3 : team.strategy === "OPPORTUNISTIC" ? 1.5 : 0;
   const iglTiming = igl ? (50 - igl.skills.decisionMaking) * 0.055 : 0;
   const jumpAtSeconds = Math.max(0, Math.min(trajectory.durationSeconds - 1, closestTime - descentDurationSeconds * 0.62 + strategyTiming + iglTiming));
-  return { teamId: team.id, destinationId, jumpAtSeconds: Number(jumpAtSeconds.toFixed(1)), jumpedAtSeconds: null, landedAtSeconds: null, status: "ON_BUS", jumpOrigin: null, descentDurationSeconds: Number(descentDurationSeconds.toFixed(1)) };
+  const landingZone = requestedZone ?? defaultLandingZone(team);
+  const zoneOffset = landingZone === "CENTER" ? { x: 0, y: 0 } : landingZone === "ROOFTOPS" ? { x: 130, y: -110 } : { x: 310, y: 260 };
+  const hash = [...team.id].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
+  const angle = (hash % 360) * Math.PI / 180;
+  const errorX = Math.cos(angle) * landingError;
+  const errorY = Math.sin(angle) * landingError;
+  return {
+    teamId: team.id, destinationId, jumpAtSeconds: Number(jumpAtSeconds.toFixed(1)),
+    jumpedAtSeconds: null, landedAtSeconds: null, status: "ON_BUS", jumpOrigin: null,
+    descentDurationSeconds: Number(descentDurationSeconds.toFixed(1)), landingZone,
+    landingOffset: { x: zoneOffset.x + errorX, y: zoneOffset.y + errorY }, landingError,
+  };
 }
 function chooseBotDestination(team: BattleTeam, random: SeededRandom, trajectory: BattleBusState["trajectory"]): string {
   const scored = BATTLE_ROYALE_MAP.locations.map(location => {
@@ -824,15 +842,19 @@ function createBattleBus(random: SeededRandom, teams: BattleTeam[], userDropLoca
   }
   return { trajectory, elapsedSeconds: 0, durationSeconds: trajectory.durationSeconds, position: { ...trajectory.start }, status: "IN_PROGRESS", plans };
 }
-export function setBattleBusDestination(match: BattleMatch, locationId: string): BattleMatch {
+export function setBattleBusDestination(match: BattleMatch, locationId: string, landingZone?: LandingZone): BattleMatch {
   if (match.stage !== "DROP" || match.bus.status === "COMPLETE") throw new Error("La phase Battle Bus est terminée.");
   const plan = match.bus.plans.find(candidate => candidate.teamId === match.userTeam.id);
   if (!plan || plan.status !== "ON_BUS") throw new Error("Ton équipe a déjà sauté.");
   if (!match.map.locations.some(location => location.id === locationId)) throw new Error("POI inconnu.");
+  if (landingZone && !["CENTER", "ROOFTOPS", "OUTSKIRTS"].includes(landingZone)) throw new Error("Zone d’atterrissage invalide.");
   plan.destinationId = locationId;
-  const replacement = makeBusFlightPlan(match.userTeam, locationId, match.bus.trajectory);
+  const replacement = makeBusFlightPlan(match.userTeam, locationId, match.bus.trajectory, landingZone ?? plan.landingZone);
   plan.jumpAtSeconds = Math.max(match.bus.elapsedSeconds, replacement.jumpAtSeconds);
   plan.descentDurationSeconds = replacement.descentDurationSeconds;
+  plan.landingZone = replacement.landingZone;
+  plan.landingOffset = replacement.landingOffset;
+  plan.landingError = replacement.landingError;
   match.userTeam.dropLocationId = locationId;
   match.selectedDropId = locationId;
   match.currentLocationId = locationId;
@@ -870,8 +892,8 @@ export function advanceBattleBus(match: BattleMatch, seconds = 1): BattleMatch {
         if (progress >= 1) {
           plan.status = "LANDED";
           plan.landedAtSeconds = match.bus.elapsedSeconds;
-          team.position = { x: destination.x, y: destination.y };
-          if (team.isUser) event(match, "DROP", "Atterrissage confirmé", "Ton équipe atterrit à " + destination.name + ".");
+          team.position = { x: clamp(destination.x + plan.landingOffset.x, 0, match.map.width), y: clamp(destination.y + plan.landingOffset.y, 0, match.map.height) };
+          if (team.isUser) event(match, "DROP", "Atterrissage confirmé", "Ton équipe atterrit à " + destination.name + " · " + ({ CENTER: "centre du POI", ROOFTOPS: "toits et hauteurs", OUTSKIRTS: "périphérie" }[plan.landingZone]) + " · précision : " + Math.max(0, 100 - Math.round(plan.landingError / 2.2)) + "/100.");
         }
       }
     }
@@ -935,7 +957,7 @@ export function resolveDrop(match: BattleMatch, action: Extract<BattleAction, { 
   for (const plan of match.bus.plans) {
     const team = match.teams.find(candidate => candidate.id === plan.teamId);
     const destination = match.map.locations.find(location => location.id === plan.destinationId);
-    if (team && destination) { team.position = { x: destination.x, y: destination.y }; plan.status = "LANDED"; plan.landedAtSeconds = match.bus.elapsedSeconds; }
+    if (team && destination) { team.position = { x: clamp(destination.x + plan.landingOffset.x, 0, match.map.width), y: clamp(destination.y + plan.landingOffset.y, 0, match.map.height) }; plan.status = "LANDED"; plan.landedAtSeconds = match.bus.elapsedSeconds; }
   }
   match.bus.status = "COMPLETE";
   const random = new SeededRandom(match.seed + 101);
