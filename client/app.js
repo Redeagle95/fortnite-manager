@@ -72,6 +72,18 @@ function sendZoneAction(type, extra = {}) {
 }
 function renderMap(match) {
   const width = match.map.width, height = match.map.height;
+  const routeLayer = $("bus-route-layer");
+  const busMarker = $("bus-marker");
+  if (match.bus) {
+    routeLayer.setAttribute("viewBox", "0 0 " + width + " " + height);
+    routeLayer.innerHTML = '<line class="bus-route-base" x1="' + match.bus.trajectory.start.x + '" y1="' + match.bus.trajectory.start.y + '" x2="' + match.bus.trajectory.end.x + '" y2="' + match.bus.trajectory.end.y + '"></line><line class="bus-route-progress" x1="' + match.bus.trajectory.start.x + '" y1="' + match.bus.trajectory.start.y + '" x2="' + match.bus.position.x + '" y2="' + match.bus.position.y + '"></line>';
+    busMarker.classList.toggle("hidden", match.bus.status === "COMPLETE");
+    busMarker.style.left = (match.bus.position.x / width * 100) + "%";
+    busMarker.style.top = (match.bus.position.y / height * 100) + "%";
+  } else {
+    routeLayer.innerHTML = "";
+    busMarker.classList.add("hidden");
+  }
   const storm = match.storm;
   const diameter = storm.radius * 2 / width * 100;
   const circleStyle = "width:" + diameter + "%;height:" + diameter + "%;left:" + (storm.x / width * 100 - diameter / 2) + "%;top:" + (storm.y / height * 100 - diameter / 2) + "%;";
@@ -97,7 +109,17 @@ function renderMap(match) {
   $("poi-layer").innerHTML = poiButtons;
   const markerLayer = $("team-marker-layer");
   const existingMarkers = new Map([...markerLayer.querySelectorAll("[data-team-marker]")].map(marker => [marker.dataset.teamMarker, marker]));
-  for (const team of match.teams.filter(candidate => candidate.alive)) {
+  const visibleTeams = match.bus && match.bus.status !== "COMPLETE"
+    ? match.teams.filter(candidate => {
+        if (!candidate.alive) return false;
+        if (candidate.isUser) return true;
+        const plan = match.bus.plans.find(item => item.teamId === candidate.id);
+        if (!plan || plan.status === "ON_BUS") return false;
+        const distance = Math.hypot(candidate.position.x - match.userTeam.position.x, candidate.position.y - match.userTeam.position.y);
+        return distance <= 1750 || (plan.status === "LANDED" && plan.destinationId === match.userTeam.dropLocationId);
+      })
+    : match.teams.filter(candidate => candidate.alive);
+  for (const team of visibleTeams) {
     const alive = team.players.filter(player => player.alive).length;
     let marker = existingMarkers.get(team.id);
     if (!marker) {
@@ -116,7 +138,8 @@ function renderMap(match) {
   document.querySelectorAll("[data-poi]").forEach(button => button.addEventListener("click", () => {
     if (match.stage === "DROP") {
       $("drop-location").value = button.dataset.poi;
-      showToast("Point de drop sélectionné : " + match.map.locations.find(l => l.id === button.dataset.poi).name);
+      if (match.bus && match.bus.status !== "COMPLETE") socket.emit("battle:bus:destination", { matchId: match.id, locationId: button.dataset.poi });
+      showToast("Destination sélectionnée : " + match.map.locations.find(l => l.id === button.dataset.poi).name);
     } else {
       $("rotation-location").value = button.dataset.poi;
     }
@@ -192,11 +215,40 @@ function actionsForZone(match) {
   if (match.phaseIndex >= 3 && match.phaseIndex < 6) actions.push({type:"HOLD_POSITION",label:"Construire une position défensive",description:"Dépenser 10 matériaux pour sécuriser temporairement la position.",risk:"LOW"});
   return actions;
 }
+function renderBusControls(match) {
+  const panel = $("bus-controls");
+  const bus = match.bus;
+  if (!panel || !bus || bus.status === "COMPLETE" || match.stage !== "DROP") {
+    if (panel) panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const plan = bus.plans.find(item => item.teamId === match.userTeam.id);
+  const destination = match.map.locations.find(location => location.id === plan?.destinationId);
+  const elapsed = Math.floor(bus.elapsedSeconds);
+  const remaining = Math.max(0, Math.ceil((plan?.jumpAtSeconds ?? elapsed) - elapsed));
+  const visibleEnemies = bus.plans.filter(item => {
+    if (item.teamId === match.userTeam.id || item.status === "ON_BUS") return false;
+    const team = match.teams.find(candidate => candidate.id === item.teamId);
+    return team && Math.hypot(team.position.x - match.userTeam.position.x, team.position.y - match.userTeam.position.y) <= 1750;
+  }).length;
+  const options = match.map.locations.map(location => '<option value="' + location.id + '"' + (location.id === plan?.destinationId ? ' selected' : '') + '>' + escapeHtml(location.name) + ' · Loot ' + location.lootQuality + ' · Danger ' + location.danger + '</option>').join("");
+  const status = plan?.status === "DESCENDING"
+    ? '<div class="bus-status">DESCENTE EN COURS · ' + Math.max(0, Math.ceil((plan.descentDurationSeconds - (elapsed - (plan.jumpedAtSeconds || 0)))) ) + ' s estimées avant l’atterrissage</div>'
+    : '<div class="bus-status">SAUT CONSEILLÉ DANS <b>' + remaining + ' s</b></div>';
+  panel.innerHTML = '<div class="card-kicker">BATTLE BUS · PHASE STRATÉGIQUE</div><div class="bus-progress"><i style="width:' + Math.min(100, elapsed / bus.durationSeconds * 100) + '%"></i></div><div class="bus-meta"><span>Trajet du bus</span><b>' + elapsed + ' / ' + Math.ceil(bus.durationSeconds) + ' s</b></div><label class="bus-destination-label">Destination de ton équipe<select id="bus-destination"' + (plan?.status !== "ON_BUS" ? " disabled" : "") + '>' + options + '</select></label>' + status + '<div class="bus-intel">Adversaires repérés à proximité : <b>' + visibleEnemies + '</b></div>' + (plan?.status === "ON_BUS" ? '<button id="bus-jump-now" class="bus-jump-button">SAUTER MAINTENANT</button><small class="bus-hint">Ton IGL sautera automatiquement au timing recommandé si tu n’interviens pas.</small>' : '<small class="bus-hint">Ton équipe a quitté le bus. Tu peux suivre sa descente sur la carte.</small>');
+  const destinationSelect = $("bus-destination");
+  if (destinationSelect) destinationSelect.addEventListener("change", () => socket.emit("battle:bus:destination", { matchId: match.id, locationId: destinationSelect.value }));
+  const jumpButton = $("bus-jump-now");
+  if (jumpButton) jumpButton.addEventListener("click", () => socket.emit("battle:bus:jump", { matchId: match.id }));
+}
 function renderActions(match) {
-  const actions = match.stage === "DROP" ? spawnActions : actionsForZone(match);
+  const busActive = match.stage === "DROP" && match.bus && match.bus.status !== "COMPLETE";
+  const actions = busActive ? [] : match.stage === "DROP" ? spawnActions : actionsForZone(match);
+  renderBusControls(match);
   const zoneNumber = match.stage === "DROP" ? 1 : Math.min(7, match.phaseIndex + 1);
-  $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
-  $("decision-description").textContent = match.stage === "DROP" ? "Si ton spot est contesté, le pourcentage estime tes chances selon la force de l’équipe adverse." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
+  $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : busActive ? "Choisis ton timing de saut" : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
+  $("decision-description").textContent = busActive ? "La trajectoire est en cours. Change de destination sur la carte ou laisse ton IGL choisir le timing optimal." : match.stage === "DROP" ? "Ton équipe a atterri. Choisis comment aborder le spawn." : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
   const hasFocusAction = actions.some(action => action.type === "FOCUS_FIRE");
   let focusTargetPicker = "";
@@ -295,8 +347,10 @@ function renderMatch(match) {
   renderFncsSeries(match);
   $("setup-panel").classList.add("hidden");
   $("game-panel").classList.remove("hidden");
-  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(7, match.phaseIndex + 1);
-  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s) · ${match.totalPoints} points compétitifs.` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
+  const busActive = match.stage === "DROP" && match.bus && match.bus.status !== "COMPLETE";
+  const userBusPlan = match.bus?.plans.find(plan => plan.teamId === match.userTeam.id);
+  $("phase-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE" : "ÉLIMINATION") : busActive ? (userBusPlan?.status === "DESCENDING" ? "Battle Bus · Descente" : "Battle Bus · Choisis ton saut") : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + Math.min(7, match.phaseIndex + 1);
+  $("phase-subtitle").textContent = match.stage === "FINISHED" ? `Tu termines #${match.finalPlacement} · ${match.userTeam.eliminations} élimination(s) · ${match.totalPoints} points compétitifs.` : busActive ? `Destination : ${match.map.locations.find(l => l.id === userBusPlan?.destinationId)?.name || "à définir"} · Bus : ${Math.floor(match.bus.elapsedSeconds)} s / ${Math.ceil(match.bus.durationSeconds)} s · Saut IGL : ${Math.ceil(userBusPlan?.jumpAtSeconds || 0)} s` : `Drop : ${match.map.locations.find(l => l.id === match.selectedDropId).name} · Position : ${match.map.locations.find(l => l.id === match.currentLocationId).name} · Temps de jeu : ${Math.floor((match.gameTimeSeconds || 0) / 60)}:${String((match.gameTimeSeconds || 0) % 60).padStart(2,"0")}`;
   $("teams-left").textContent = match.teamsRemaining;
   $("players-left").textContent = match.playersRemaining;
   $("kills-left").textContent = match.userTeam.eliminations;
