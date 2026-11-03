@@ -94,7 +94,7 @@ function projectOntoBusPath(point: { x: number; y: number }, trajectory: BusTraj
 }
 
 export function calculateJumpTiming(
-  location: MapLocation,
+  location: Pick<MapLocation, "x" | "y">,
   trajectory: BusTrajectory,
   descentSeconds = 12,
 ): { jumpAtSeconds: number; landingAtSeconds: number; distanceFromBus: number } {
