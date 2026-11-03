@@ -19,8 +19,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function registerBattleRoyaleSocket(io: Server): void {
-  // The simulation is deliberately turn-based: no server clock advances in the background.
-  // The player explicitly advances the bus or game clock when ready.
+  // The bus is paused while the user is aboard. Once the user jumps, the descent
+  // and the remaining AI landings progress automatically in real time.
+  setInterval(() => {
+    for (const match of matches.values()) {
+      if (match.stage !== "DROP" || match.bus.status === "COMPLETE") continue;
+      const userPlan = match.bus.plans.find(plan => plan.teamId === match.userTeam.id);
+      if (!userPlan || userPlan.status === "ON_BUS") continue;
+      advanceBattleBus(match, 1);
+      io.to(match.id).emit("battle:state", match);
+    }
+  }, 1000);
+
   io.on("connection", (socket) => {
     socket.on("battle:create", (payload: unknown) => {
       try {
@@ -74,6 +84,10 @@ export function registerBattleRoyaleSocket(io: Server): void {
         const requested = Number(payload.seconds ?? (match.stage === "DROP" ? 5 : 30));
         if (!Number.isFinite(requested) || requested <= 0) throw new Error("Durée d'avance invalide.");
         if (match.stage === "DROP" && match.bus.status !== "COMPLETE") {
+          const userPlan = match.bus.plans.find(plan => plan.teamId === match.userTeam.id);
+          if (!userPlan || userPlan.status !== "ON_BUS") {
+            throw new Error("Après ton saut, la descente se déroule automatiquement.");
+          }
           advanceBattleBus(match, Math.max(1, Math.min(10, Math.floor(requested))));
         } else if (match.stage === "LOOT" || match.stage === "ZONE") {
           advanceMatchTime(match, Math.max(1, Math.min(120, Math.floor(requested))));
