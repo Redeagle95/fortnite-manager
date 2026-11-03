@@ -249,13 +249,16 @@ function renderBusControls(match) {
 }
 function renderActions(match) {
   const busActive = match.stage === "DROP" && match.bus && match.bus.status !== "COMPLETE";
+  const userBusPlan = match.bus?.plans.find(item => item.teamId === match.userTeam.id);
+  const userStillOnBus = busActive && userBusPlan?.status === "ON_BUS";
+  const descentInProgress = busActive && !userStillOnBus;
   const actions = busActive ? [] : match.stage === "DROP" ? spawnActions : actionsForZone(match);
   renderBusControls(match);
   const zoneNumber = match.stage === "DROP" ? 1 : Math.min(7, match.phaseIndex + 1);
   $("decision-title").textContent = match.stage === "FINISHED" ? (match.result === "WIN" ? "VICTORY ROYALE !" : "ÉQUIPE ÉLIMINÉE") : busActive ? "Choisis ton timing de saut" : match.stage === "DROP" ? "Zone 1 · Choisis ton spawn" : "Zone " + zoneNumber + " · " + match.map.locations.find(l => l.id === match.currentLocationId).name;
   $("decision-description").textContent = busActive ? "La trajectoire est en cours. Change de destination sur la carte ou laisse ton IGL choisir le timing optimal." : match.stage === "DROP" ? (() => { const plan = match.bus.plans.find(item => item.teamId === match.userTeam.id); const zone = ({CENTER:"centre du POI",ROOFTOPS:"toits et hauteurs",OUTSKIRTS:"périphérie"})[plan?.landingZone] || "zone prévue"; const nearby = match.teams.filter(team => !team.isUser && team.alive && team.dropLocationId === match.selectedDropId && Math.hypot(team.position.x-match.userTeam.position.x,team.position.y-match.userTeam.position.y)<=900); return "Atterrissage : " + zone + " · précision " + Math.max(0,100-Math.round((plan?.landingError||0)/2.2)) + "/100. " + (nearby.length ? nearby.length + " équipe(s) contestent ce POI : " + nearby.map(team=>team.name).join(", ") + "." : "Aucune équipe adverse à proximité immédiate.") + " Choisis comment aborder le spawn."; })() : match.stage === "FINISHED" ? "Classement final : #" + match.finalPlacement + " · " + match.userTeam.eliminations + " élimination(s)." : zoneNumber === 2 ? "Fight ou farm de matériaux : les ressources sont plafonnées à 500 chacune." : zoneNumber === 3 ? "Choisis de rotate immédiatement ou de prendre un fight avant la rotation." : zoneNumber === 4 ? "Fight, avance vers la zone ou complète tes matériaux." : zoneNumber === 5 || zoneNumber === 6 ? "Prépare le dernier cercle : choisis entre fight, rotation et refresh." : "Dernier cercle : choisis ta stratégie, hauteur, milieu, bas ou extérieur.";
   const advanceButton = $("advance-simulation");
-  const canAdvanceBus = busActive;
+  const canAdvanceBus = userStillOnBus;
   const canAdvanceGame = match.stage === "LOOT" || match.stage === "ZONE";
   if (advanceButton) {
     advanceButton.classList.toggle("hidden", !canAdvanceBus && !canAdvanceGame);
@@ -265,8 +268,12 @@ function renderActions(match) {
   const pausedLabel = $("simulation-paused-label");
   if (pausedLabel) pausedLabel.textContent = canAdvanceBus
     ? "SIMULATION EN PAUSE · Le bus ne bouge que lorsque tu avances."
-    : canAdvanceGame ? "SIMULATION EN PAUSE · Analyse la situation avant de faire avancer le temps."
-    : "SIMULATION EN PAUSE · En attente de ta décision.";
+    : descentInProgress && userBusPlan?.status === "DESCENDING"
+      ? "DESCENTE AUTOMATIQUE · Ton équipe rejoint le point d'atterrissage."
+      : descentInProgress && userBusPlan?.status === "LANDED"
+        ? "ATTERRISSAGE CONFIRMÉ · En attente de l'arrivée des autres équipes."
+        : canAdvanceGame ? "SIMULATION EN PAUSE · Analyse la situation avant de faire avancer le temps."
+        : "SIMULATION EN PAUSE · En attente de ta décision.";
   if (match.stage === "FINISHED") { $("action-list").innerHTML = ""; return; }
   const hasFocusAction = actions.some(action => action.type === "FOCUS_FIRE");
   let focusTargetPicker = "";
